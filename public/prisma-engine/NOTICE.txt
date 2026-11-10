@@ -1,0 +1,4 @@
+FFmpeg.wasm wrapper: MIT, https://github.com/ffmpegwasm/ffmpeg.wasm
+FFmpeg core with x264: GPL, https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/core
+Corresponding build source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/build
+Distributed core version: 0.12.10. WASM binaries unmodified. PRISMA changes (2026-10-28): multithread JavaScript startup pool reduced from 32 to 4; ffmpeg-r2/classes.js handles worker error/messageerror events. Reproducible patch source: scripts/prepare-prisma-engine.mjs in the application source.

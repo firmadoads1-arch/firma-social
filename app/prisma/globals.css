@@ -1,0 +1,649 @@
+.prisma-app{--bg:#f8f9fb;--paper:#fff;--text:#242432;--muted:#82838e;--line:#e8e9ef;--purple:#7961d7;--purple-dark:#6950c8;--purple-pale:#eee9fc;--sidebar:#191923}
+.prisma-app *{box-sizing:border-box}
+.prisma-app{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.prisma-app button,.prisma-app input,.prisma-app select,.prisma-app textarea{font:inherit}
+.prisma-app button,.prisma-app a,.prisma-app input,.prisma-app select,.prisma-app textarea{-webkit-tap-highlight-color:transparent}
+.prisma-app button{cursor:pointer;background:none;border:0;color:inherit}
+.prisma-app button:disabled{cursor:not-allowed;opacity:.45}
+.prisma-app button,.prisma-app a{transition:background .16s,color .16s,box-shadow .16s,transform .16s}
+.prisma-app button:focus-visible,.prisma-app a:focus-visible{outline:3px solid #baacf1;outline-offset:3px}
+.prisma-app h1,.prisma-app h2,.prisma-app h3,.prisma-app h4,.prisma-app p{margin:0}
+.prisma-app a{color:inherit;text-decoration:none}
+.prisma-app button svg,.prisma-app a svg{flex-shrink:0}
+.prisma-app input:not([type=range]):not([type=checkbox]):not([type=file]),.prisma-app select,.prisma-app textarea{width:100%;border:1px solid #e1e2e9;border-radius:9px;padding:11px 13px;background:#fff;color:var(--text);outline:none}
+.prisma-app input:focus,.prisma-app select:focus,.prisma-app textarea:focus{border-color:#9c84ed!important;box-shadow:0 0 0 3px #9c84ed18}
+.prisma-app input::placeholder,.prisma-app textarea::placeholder{color:#a0a0aa}
+.prisma-app label{display:block;font-size:12px;font-weight:600}
+.prisma-app label>input,.prisma-app label>select,.prisma-app label>textarea{margin-top:8px}
+.prisma-app fieldset{border:0;margin:0;padding:0;min-width:0}
+.prisma-app input[type=file]{font-weight:400}
+.prisma-app input[type=range]{accent-color:var(--purple);width:100%;height:5px;cursor:pointer}
+.prisma-app table{width:100%;border-collapse:collapse;font-size:12px}
+.prisma-app th,.prisma-app td{padding:13px;text-align:left;border-bottom:1px solid var(--line)}
+.prisma-app th{color:var(--muted);font-weight:500}
+.prisma-app code{font-family:monospace}
+.prisma-app progress{width:100%;height:6px;border:0;border-radius:5px;overflow:hidden;background:#ece8f7}
+.prisma-app progress::-webkit-progress-bar{background:#ece8f7}
+.prisma-app progress::-webkit-progress-value{background:var(--purple);border-radius:5px}
+.prisma-app progress::-moz-progress-bar{background:var(--purple)}
+.prisma-app .primary,.prisma-app .secondary,.prisma-app .hero-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;border-radius:8px;padding:11px 16px;font-size:12px;font-weight:600;white-space:nowrap;min-height:40px}
+.prisma-app .primary{background:var(--purple);color:white;border:1px solid var(--purple);box-shadow:0 3px 5px #57438f0c}
+.prisma-app .primary:hover:not(:disabled){background:var(--purple-dark);transform:translateY(-1px)}
+.prisma-app .secondary{background:white;border:1px solid var(--line);color:#555563}
+.prisma-app .secondary:hover:not(:disabled){background:#f6f3fc;border-color:#d4c9ef}
+.prisma-app .full{width:100%}
+.prisma-app .icon-button{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;color:#898a97}
+.prisma-app .icon-button:hover{background:#efedf7;color:var(--purple)}
+.prisma-app .badge{display:inline-flex;align-items:center;gap:7px;font-size:9px;font-weight:700;letter-spacing:1.05px;color:#7b689f}
+.prisma-app .tiny-dot,.prisma-app .dot{width:6px;height:6px;border-radius:50%;background:#90b99f;display:inline-block}
+.prisma-app .eyebrow{font-size:9px!important;letter-spacing:1.6px;font-weight:600;color:#8c7ba8!important;margin-bottom:10px!important}
+.prisma-app .panel{background:white;border:1px solid var(--line);border-radius:12px}
+.prisma-app .panel-heading{display:flex;align-items:center;justify-content:space-between;padding:17px 20px;border-bottom:1px solid var(--line);gap:10px}
+.prisma-app .panel-heading h3{font-size:13px;font-weight:600;display:flex;align-items:center;gap:9px}
+.prisma-app .panel-heading h3 svg{color:#8b79ad}
+.prisma-app .panel-heading button{display:flex;align-items:center;gap:6px;font-size:11px;color:#7b6c9f}
+.prisma-app .logo{display:flex;align-items:center;gap:11px;line-height:1.15}
+.prisma-app .logo>span:last-child{font-size:22px;font-weight:700;letter-spacing:3px}
+.prisma-app .logo small{display:block;font-size:8px;font-weight:500;letter-spacing:3.8px;margin-top:6px;color:#92929e}
+.prisma-app .logo-symbol{position:relative;width:38px;height:42px;display:flex;align-items:center;justify-content:center;color:#c7b7ff}
+.prisma-app .logo-symbol svg{width:34px;height:34px;transform:rotate(-8deg)}
+.prisma-app .logo-symbol i{position:absolute;width:22px;height:22px;border-left:1px solid #a690e1;border-bottom:1px solid #a690e1;transform:rotate(-53deg);left:10px;top:12px}
+.prisma-app .sidebar{position:fixed;inset:0 auto 0 0;width:234px;background:var(--sidebar);color:#f3f3f8;padding:33px 18px 0;display:flex;flex-direction:column;z-index:30}
+.prisma-app .sidebar>.logo{margin:0 11px 42px}
+.prisma-app .sidebar-label{font-size:8px;font-weight:500;letter-spacing:1.5px;color:#656571;margin:0 14px 13px}
+.prisma-app .sidebar nav{display:flex;flex-direction:column;gap:7px}
+.prisma-app .sidebar nav button,.prisma-app .sidebar-bottom>button{display:flex;align-items:center;text-align:left;gap:12px;width:100%;padding:12px 13px;font-size:11px;font-weight:500;color:#a2a2af;border-radius:7px}
+.prisma-app .sidebar nav button svg{color:#777787}
+.prisma-app .sidebar nav button.active{background:#332c49;color:#ded1ff}
+.prisma-app .sidebar nav button.active svg{color:#b7a1ec}
+.prisma-app .sidebar nav button:hover,.prisma-app .sidebar-bottom>button:hover{background:#272632;color:white}
+.prisma-app .sidebar nav button>span{margin-left:auto;font-size:9px;background:#443659;color:#ccb3f3;padding:1px 5px;border-radius:4px}
+.prisma-app .sidebar-lab{border:1px solid #383246;background:linear-gradient(135deg,#292334,#211f2a);border-radius:10px;padding:19px 15px;margin-top:34px}
+.prisma-app .lab-orb{width:41px;height:41px;background:linear-gradient(135deg,#4d3d67,#30273f);color:#c7adeb;display:flex;align-items:center;justify-content:center;border:1px solid #59466f;border-radius:12px;margin-bottom:15px}
+.prisma-app .sidebar-lab strong{font-size:12px;font-weight:500;line-height:1.65;display:block}
+.prisma-app .sidebar-lab p{font-size:10px;line-height:1.7;color:#8d879c;margin:9px 0 14px}
+.prisma-app .sidebar-link{display:flex;align-items:center;justify-content:space-between;width:100%;border-top:1px solid #393145;padding-top:13px;font-size:9px;color:#bfa7ed}
+.prisma-app .sidebar-bottom{margin-top:auto;padding-top:25px}
+.prisma-app .sidebar-bottom>button{padding-top:10px;padding-bottom:10px}
+.prisma-app .sidebar-bottom .dot{margin-left:auto}
+.prisma-app .owner{margin:15px -18px 0;padding:21px 15px;display:flex;align-items:center;gap:9px;border-top:1px solid #2e2e38}
+.prisma-app .avatar{display:inline-flex;align-items:center;justify-content:center;width:33px;height:33px;border-radius:50%;background:#e4d8ca;color:#796854;font-weight:600;font-size:10px;flex-shrink:0}
+.prisma-app .owner strong{display:block;font-size:10px;font-weight:500}
+.prisma-app .owner small{display:block;color:#757581;font-size:8px;margin-top:3px}
+.prisma-app .owner>button{margin-left:auto;color:#6b6b78}
+.prisma-app .app-main{margin-left:234px;min-height:100vh;display:flex;flex-direction:column}
+.prisma-app .topbar{height:70px;flex-shrink:0;background:#ffffffb8;border-bottom:1px solid var(--line);padding:0 34px;display:flex;align-items:center;justify-content:space-between}
+.prisma-app .topbar>div{display:flex;align-items:center;gap:17px}
+.prisma-app .topbar .top-brand{font-size:11px;color:#9898a2}
+.prisma-app .topbar strong{font-size:11px;font-weight:500;color:#676771}
+.prisma-app .topbar svg{color:#b6b6bf}
+.prisma-app .topbar .private-pill{font-size:9px;color:#7b7c85;display:flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid #e9e9ee;border-radius:5px;background:#fafafa}
+.prisma-app .top-avatar{width:30px;height:30px}
+.prisma-app .mobile-menu{display:none}
+.prisma-app .workspace{padding:34px 35px 42px;max-width:1590px;width:100%;margin:0 auto;flex:1}
+.prisma-app .page-heading{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:27px}
+.prisma-app .page-heading h1{font-size:30px;line-height:1.24;letter-spacing:-.9px;font-weight:600}
+.prisma-app .page-heading h1>span{color:var(--purple)}
+.prisma-app .page-heading p:not(.eyebrow){font-size:11px;color:#8d8d98;margin-top:10px}
+.prisma-app .hero-panel{height:252px;background:#eeebf5;border:1px solid #e4def0;border-radius:12px;padding:30px 34px;display:grid;grid-template-columns:1.1fr 1fr;overflow:hidden;position:relative;margin-bottom:32px}
+.prisma-app .hero-panel>.badge{font-size:8px}
+.prisma-app .hero-panel .tiny-dot{background:#9981c4}
+.prisma-app .hero-panel h2{font-size:27px;line-height:1.25;font-weight:500;letter-spacing:-.6px;margin:15px 0 10px;color:#3c344e}
+.prisma-app .hero-panel h2 em{font-style:normal;color:#8d73bd}
+.prisma-app .hero-panel p{font-size:10px;line-height:1.8;color:#9a8fa9}
+.prisma-app .hero-button{background:white;color:#70588f;font-size:10px;min-height:32px;padding:7px 11px;margin-top:15px;border:1px solid #dfd6ec}
+.prisma-app .hero-visual{position:relative;height:100%;min-width:0}
+.prisma-app .visual-grid{position:absolute;inset:-65px -40px -60px -60px;background-image:linear-gradient(#c7bada24 1px,transparent 1px),linear-gradient(90deg,#c7bada24 1px,transparent 1px);background-size:26px 26px;mask-image:radial-gradient(ellipse,black,transparent 70%)}
+.prisma-app .floating-frame{position:absolute;width:235px;height:155px;border-radius:10px;border:1px solid #fff9;box-shadow:0 15px 35px #7b5b9a1c}
+.prisma-app .floating-frame.front{left:50%;top:20px;transform:translateX(-47%) rotate(7deg);background:#fff;padding:6px;z-index:2}
+.prisma-app .floating-frame.back{left:50%;top:5px;transform:translateX(-58%) rotate(-9deg);background:#ddd2f2;display:flex;gap:5px;padding:30px 10px 10px;opacity:.9}
+.prisma-app .floating-frame.back>span{flex:1;border-radius:5px;background:linear-gradient(160deg,#b5a0d9,#f4dacc)}
+.prisma-app .frame-toolbar{display:flex;gap:3px;align-items:center;height:16px;padding:0 4px}
+.prisma-app .frame-toolbar>i{height:3px;width:3px;border-radius:50%;background:#d9d0e1}
+.prisma-app .frame-toolbar>span{margin-left:auto;font-size:5px;color:#b0a6b9;letter-spacing:1px}
+.prisma-app .frame-art{height:124px;background:linear-gradient(145deg,#ddc1de,#c7b6df 45%,#dcd1d7);border-radius:5px;position:relative;overflow:hidden}
+.prisma-app .ribbon{position:absolute;width:175px;height:160px;border:28px solid #e7cdda;border-radius:45%;transform:rotate(-30deg);box-shadow:9px 9px 22px #796c9530,inset 8px 10px 15px #725b9a22}
+.prisma-app .ribbon.r1{left:-60px;top:-60px;border-color:#f1dde9}
+.prisma-app .ribbon.r2{left:62px;top:42px;border-color:#d4c0df}
+.prisma-app .ribbon.r3{left:145px;top:-110px;border-color:#e0c8d6}
+.prisma-app .play-disc{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:white;background:#ffffff35;border:1px solid #ffffff80;border-radius:50%;backdrop-filter:blur(4px)}
+.prisma-app .play-disc svg{width:15px;margin-left:3px}
+.prisma-app .frame-timing{position:absolute;bottom:10px;left:10px;right:10px;font-size:5px;display:flex;align-items:center;gap:8px;color:#66526c}
+.prisma-app .frame-timing i{height:2px;background:#ffffff7f;flex:1;position:relative}
+.prisma-app .frame-timing i:after{content:'';display:block;width:40%;height:2px;background:white}
+.prisma-app .floating-badge{position:absolute;bottom:4px;left:50%;transform:translateX(-2%);font-size:8px;color:#827397;background:#fffffff0;padding:8px 12px;border-radius:7px;box-shadow:0 6px 15px #8d70aa15;display:flex;align-items:center;gap:6px;z-index:3;white-space:nowrap}
+.prisma-app .floating-badge svg{color:#8fbc9e;width:13px}
+.prisma-app .section-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:19px}
+.prisma-app .section-heading h2{font-size:17px;font-weight:600;letter-spacing:-.3px}
+.prisma-app .section-heading h2>span{margin-left:7px;display:inline-flex;background:#edecf2;color:#888290;font-size:10px;border-radius:5px;padding:1px 6px;font-weight:500;vertical-align:middle}
+.prisma-app .section-heading p{font-size:10px;color:#9695a1;margin-top:5px}
+.prisma-app .search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:7px;background:white;padding:0 11px;width:222px;color:#b6b4be}
+.prisma-app .search input{margin:0!important;border:0!important;background:transparent!important;padding:10px 0!important;box-shadow:none!important;font-size:10px!important;font-weight:400}
+.prisma-app .search svg{width:14px}
+.prisma-app .categories{display:flex;gap:5px;border-bottom:1px solid var(--line);margin-bottom:21px;padding-bottom:13px}
+.prisma-app .categories button{font-size:10px;color:#95929f;padding:7px 13px;display:flex;align-items:center;gap:6px;border:1px solid transparent;border-radius:6px}
+.prisma-app .categories button.active{background:white;border-color:#ded7eb;color:#765c9d;box-shadow:0 1px 2px #2f153105;font-weight:600}
+.prisma-app .categories small{font-size:8px;background:#efebf5;color:#9c89b6;padding:0 4px;border-radius:3px}
+.prisma-app .tool-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+.prisma-app .tool-card{border:1px solid #e5e5ec;background:white;border-radius:10px;padding:19px 19px 0;text-align:left;display:flex;flex-direction:column;min-height:184px}
+.prisma-app .tool-card:hover{border-color:#bfb0de;box-shadow:0 8px 22px #56416e0b;transform:translateY(-2px)}
+.prisma-app .tool-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+.prisma-app .tool-icon{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px}
+.prisma-app .tool-icon.violet{background:#f1edf9;color:#9680c4}
+.prisma-app .tool-icon.blue{background:#ecf1f9;color:#819ec6}
+.prisma-app .tool-icon.rose{background:#f8edf1;color:#c18a9b}
+.prisma-app .tool-icon.amber{background:#faf1e6;color:#b99b75}
+.prisma-app .tool-icon.green{background:#eaf3ee;color:#80aa92}
+.prisma-app .tool-access{color:#90a99a;font-size:8px;display:flex;align-items:center;gap:4px}
+.prisma-app .tool-access svg{width:10px}
+.prisma-app .tool-card h3{font-size:13px;letter-spacing:-.1px;font-weight:600;margin-bottom:7px}
+.prisma-app .tool-card>p{font-size:10px;color:#95929f;line-height:1.8;max-width:260px;min-height:38px;margin-bottom:14px}
+.prisma-app .tool-card-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 0;margin-top:auto;border-top:1px solid #f1eff5;color:#a9a3b1}
+.prisma-app .tool-card-footer>span{font-size:7px;letter-spacing:.65px;font-weight:500}
+.prisma-app .tool-card-footer svg{width:13px;color:#bcb5c7}
+.prisma-app .workspace-footnote{display:flex;gap:7px;align-items:center;margin-top:24px;font-size:9px;color:#aaa7b3}
+.prisma-app .workspace-footnote svg{color:#a7b5ac}
+.prisma-app .workspace-footnote>button{display:flex;align-items:center;gap:5px;margin-left:auto;color:#9b8aae;white-space:nowrap}
+.prisma-app .main-footer{display:flex;justify-content:space-between;align-items:center;margin:0 35px;border-top:1px solid var(--line);padding:19px 0;font-size:8px;color:#b6b2be;letter-spacing:.1px}
+.prisma-app .main-footer>span:first-child{font-size:10px;letter-spacing:1.5px;color:#aaa4b2}
+.prisma-app .main-footer b{font-size:7px;font-weight:400;letter-spacing:1px;margin-left:5px}
+.prisma-app .main-footer .tiny-dot{width:4px;height:4px;margin-right:4px}
+.prisma-app .back-link{font-size:10px;display:flex;align-items:center;gap:5px;color:#a294b5;margin-bottom:13px}
+.prisma-app .editor-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
+.prisma-app .editor-stage{min-width:0}
+.prisma-app .source-panel{overflow:hidden}
+.prisma-app .dropzone{width:100%;min-height:360px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px;background:linear-gradient(160deg,#fff,#faf8ff)}
+.prisma-app .upload-orb{width:65px;height:65px;border:1px dashed #d0c2ea;background:#f1ebfa;color:#a58bcf;border-radius:17px;display:flex;align-items:center;justify-content:center;margin-bottom:22px}
+.prisma-app .dropzone h3{font-size:17px;font-weight:500;letter-spacing:-.3px}
+.prisma-app .dropzone p{font-size:11px;color:#9992a6;margin:9px 0 22px}
+.prisma-app .dropzone small{color:#aaa3b3;font-size:9px;margin-top:23px}
+.prisma-app .media-container{position:relative;background:#16141d;min-height:220px;display:flex;align-items:center;justify-content:center}
+.prisma-app .media-container>video,.prisma-app .media-container>img{display:block;width:100%;max-height:440px;object-fit:contain}
+.prisma-app .audio-preview{min-height:220px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:30px;color:#b39bcc;background:linear-gradient(135deg,#e5daee,#f7eef5);width:100%}
+.prisma-app .audio-preview audio{width:90%;max-width:360px}
+.prisma-app .file-details{display:flex;align-items:center;gap:10px;padding:15px}
+.prisma-app .file-details>div{min-width:0;flex:1}
+.prisma-app .file-details strong{font-size:11px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.prisma-app .file-details small{font-size:9px;color:#aaa4b2;display:block;margin-top:3px}
+.prisma-app .file-mini-icon{color:#a18bbf;width:35px;height:35px;background:#f3eef9;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.prisma-app .info-strip{display:flex;align-items:flex-start;gap:8px;padding:12px;font-size:10px;color:#8c819d;background:#f1edf7;border-radius:8px;margin:15px 0}
+.prisma-app .info-strip svg{flex-shrink:0;margin-top:1px}
+.prisma-app .info-strip p{line-height:1.7}
+.prisma-app .settings-panel{overflow:hidden}
+.prisma-app .settings-panel .panel-heading{padding:17px}
+.prisma-app .control-group{padding:18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.prisma-app .control-group h4{font-size:8px;letter-spacing:1.2px;color:#a79aaf;margin-bottom:3px;font-weight:600}
+.prisma-app .control-group label{font-size:10px;color:#797080}
+.prisma-app .control-group input:not([type=range]):not([type=checkbox]),.prisma-app .control-group select{font-size:11px;padding:9px 10px}
+.prisma-app .slider-control>span{display:flex;align-items:center;justify-content:space-between;font-weight:400}
+.prisma-app .slider-control output{font-size:10px;color:#9380ad;font-variant-numeric:tabular-nums}
+.prisma-app .slider-control input{margin:12px 0 4px}
+.prisma-app .preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.prisma-app .preset-grid>button{padding:4px 4px 7px;border:1px solid var(--line);border-radius:7px}
+.prisma-app .preset-grid>button.selected{border-color:#ad94d3;background:#f3edf9}
+.prisma-app .preset-grid strong{font-size:8px;font-weight:500;color:#9c8fa9;display:block;margin-top:5px}
+.prisma-app .preset-swatch{display:block;height:38px;border-radius:4px;background:linear-gradient(125deg,#cbb8a7,#e5d8be 42%,#a8c0a7 43%,#628279)}
+.prisma-app .swatch-1{filter:saturate(.4) contrast(1.4)}
+.prisma-app .swatch-2{filter:saturate(1.7)}
+.prisma-app .toggle-row{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:10px}
+.prisma-app .toggle-row>span{flex:1;font-weight:400}
+.prisma-app .toggle-row input{position:absolute;opacity:0;width:1px;height:1px}
+.prisma-app .toggle-row>i{width:29px;height:16px;background:#dcd6e4;border-radius:20px;position:relative}
+.prisma-app .toggle-row>i:after{content:'';width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:transform .15s}
+.prisma-app .toggle-row input:checked+i{background:var(--purple)}
+.prisma-app .toggle-row input:checked+i:after{transform:translateX(13px)}
+.prisma-app .toggle-row input:focus-visible+i{outline:2px solid #b39bda;outline-offset:2px}
+.prisma-app .two-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.prisma-app .field-note{font-size:10px!important;line-height:1.8;color:#a399ae!important;font-weight:400}
+.prisma-app .export-control{padding:18px;background:#fdfbff}
+.prisma-app .export-control .toggle-row{margin-bottom:18px}
+.prisma-app .export-control>p{font-size:8px;color:#b0a2bc;text-align:center;margin-top:11px}
+.prisma-app .export-button{font-size:11px}
+.prisma-app .export-button>svg:last-child{margin-left:auto}
+.prisma-app .rect-overlay{position:absolute;border:2px dashed #d7adf4;background:#c8a4ed22;pointer-events:none}
+.prisma-app .rect-overlay span{font-size:8px;background:#79559e;color:white;white-space:nowrap;position:absolute;top:-18px;left:-2px;padding:1px 4px}
+.prisma-app .progress-panel{padding:17px;border:1px solid #e0d7ed;background:#fff;border-radius:9px;margin:18px 0}
+.prisma-app .progress-panel>div{display:flex;align-items:center;gap:9px;font-size:11px;color:#8c73a9;margin-bottom:12px}
+.prisma-app .progress-panel strong{font-weight:500;flex:1}
+.prisma-app .progress-panel button{font-size:10px;color:#9e8ead;text-decoration:underline}
+.prisma-app .progress-panel small{font-size:9px;color:#ada1ba;display:block;margin-top:9px}
+.prisma-app .error{padding:13px;border:1px solid #ecd2da;background:#fbf0f3;color:#b36a7d;border-radius:8px;font-size:11px;line-height:1.7;margin:14px 0;overflow-wrap:anywhere}
+.prisma-app .results-section{margin-top:30px}
+.prisma-app .results-grid{display:grid;grid-template-columns:1fr;gap:15px}
+.prisma-app .result-card{overflow:hidden}
+.prisma-app .result-card>video,.prisma-app .result-card>img{width:100%;max-height:350px;background:#15131a;object-fit:contain;display:block}
+.prisma-app .result-body{padding:16px}
+.prisma-app .result-body strong{display:block;font-size:12px}
+.prisma-app .result-body small{display:block;color:#a599b2;font-size:10px;margin-top:3px}
+.prisma-app .result-body>div{display:flex;gap:8px;margin-top:14px}
+.prisma-app .result-body .primary,.prisma-app .result-body .secondary{font-size:10px;padding:8px 11px;min-height:34px}
+.prisma-app .stat-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:25px 0}
+.prisma-app .stat-row>.panel{padding:22px 18px;display:flex;align-items:center;gap:14px}
+.prisma-app .stat-row svg{color:#b4a0cc;width:23px;flex-shrink:0}
+.prisma-app .stat-row strong{font-size:23px;letter-spacing:-.8px;font-weight:500;display:block}
+.prisma-app .stat-row small{font-size:9px;color:#a49bae;display:block;margin-top:4px}
+.prisma-app .empty{min-height:300px;padding:35px;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;color:#ab9abb}
+.prisma-app .empty h3{font-size:17px;color:#776384;font-weight:500;margin:20px 0 10px}
+.prisma-app .empty p{font-size:11px;line-height:1.8;max-width:340px;color:#a799b2}
+.prisma-app .empty button{margin-top:22px}
+.prisma-app .library-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.prisma-app .library-card{overflow:hidden}
+.prisma-app .library-preview{height:175px;position:relative;background:#25202c;display:flex;align-items:center;justify-content:center}
+.prisma-app .library-preview>video,.prisma-app .library-preview>img{width:100%;height:100%;object-fit:contain}
+.prisma-app .library-preview>span{position:absolute;left:12px;top:12px;font-size:7px;letter-spacing:.7px;background:#fffdf8e6;color:#908092;padding:3px 6px;border-radius:3px;pointer-events:none}
+.prisma-app .library-preview .audio-preview{min-height:175px}
+.prisma-app .library-preview .audio-preview>svg{height:30px}
+.prisma-app .library-preview audio{height:30px}
+.prisma-app .library-card-body{padding:15px}
+.prisma-app .library-card-body h3{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prisma-app .library-card-body p{font-size:9px;color:#a299af;margin-top:5px}
+.prisma-app .library-card-body>div{display:flex;gap:7px;margin-top:14px}
+.prisma-app .library-card-body .secondary{font-size:9px;min-height:30px;padding:6px 9px}
+.prisma-app .library-card-body .danger{margin-left:auto}
+.prisma-app .danger{color:#c07d91!important}
+.prisma-app .danger-fill{background:#b97086;border-color:#b97086}
+.prisma-app .compare-inputs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px}
+.prisma-app .compare-drop{padding:30px;text-align:center;position:relative;display:flex;align-items:center;flex-direction:column;cursor:pointer;border-style:dashed;overflow:hidden}
+.prisma-app .compare-drop .step-number{position:absolute;left:18px;top:13px;color:#d9d0e4;font-size:11px}
+.prisma-app .compare-drop h3{font-size:14px;font-weight:500;margin-bottom:27px}
+.prisma-app .compare-drop>svg{color:#c3b0d7;margin-bottom:18px}
+.prisma-app .compare-drop>strong{font-size:11px;font-weight:400;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#957fa8}
+.prisma-app .compare-drop>small{font-size:9px;color:#b9acbf;margin-top:7px}
+.prisma-app .compare-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.prisma-app .compare-action{display:flex;align-items:center;gap:15px;margin:22px 0}
+.prisma-app .compare-action p{font-size:10px;color:#a398ac;max-width:350px}
+.prisma-app .comparison-detail{padding:0 22px 20px}
+.prisma-app .comparison-detail .panel-heading{padding:18px 0}
+.prisma-app .comparison-detail>p{font-size:11px;line-height:1.8;color:#9b8da7;margin:18px 0}
+.prisma-app .hash-row{display:grid;gap:7px;margin:20px 0}
+.prisma-app .hash-row>strong{font-size:10px;color:#907a9d}
+.prisma-app .hash-row code{background:#f6f2f9;color:#b29bbe;padding:9px;font-size:10px;overflow-wrap:anywhere;border-radius:5px}
+.prisma-app .experiment-layout{display:grid;grid-template-columns:380px minmax(0,1fr);gap:25px;align-items:start}
+.prisma-app .experiment-form{padding:25px;display:flex;flex-direction:column;gap:20px}
+.prisma-app .experiment-form h3{font-size:14px;display:flex;gap:8px;align-items:center;font-weight:500;margin-bottom:6px}
+.prisma-app .experiment-form h3 svg{color:#a284b8}
+.prisma-app .experiment-form label{font-size:11px;color:#8c759b}
+.prisma-app .experiment-card{padding:22px;margin-bottom:15px}
+.prisma-app .experiment-card>div:first-child{display:flex;align-items:center;justify-content:space-between}
+.prisma-app .experiment-card h3{font-size:14px;font-weight:500}
+.prisma-app .experiment-card>small{font-size:9px;color:#b0a1bd}
+.prisma-app .experiment-card>p{font-size:11px;color:#a18eae;line-height:1.8;white-space:pre-wrap}
+.prisma-app .experiment-numbers{display:flex;align-items:center;gap:22px;margin:20px 0;color:#af97c3}
+.prisma-app .experiment-numbers small{display:block;font-size:8px;letter-spacing:1px}
+.prisma-app .experiment-numbers strong{font-size:25px;color:#846797;font-weight:500}
+.prisma-app .security-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.prisma-app .security-card{padding:30px}
+.prisma-app .security-card>svg{color:#ac92c1;margin-bottom:20px}
+.prisma-app .security-card h3{font-size:16px;font-weight:500;margin-bottom:10px}
+.prisma-app .security-card p{font-size:11px;line-height:1.9;color:#a28eae;max-width:400px}
+.prisma-app .account-panel{padding:25px;margin-top:25px}
+.prisma-app .account-panel h3{font-size:16px;margin-bottom:15px}
+.prisma-app .account-panel p{font-size:12px;color:#ac9cb8;margin:10px 0}
+.prisma-app .account-panel .secondary{margin-top:10px}
+.prisma-app .toast{position:fixed;bottom:25px;left:50%;transform:translateX(-50%);max-width:650px;width:max-content;background:#27212f;color:#f4edf9;padding:16px 20px;box-shadow:0 12px 30px #1b13272f;border:1px solid #51415f;border-radius:10px;display:flex;align-items:center;gap:12px;font-size:12px;z-index:100}
+.prisma-app .toast>svg{flex-shrink:0;color:#c3a2df}
+.prisma-app .toast button{color:#bcadc7}
+.prisma-app .modal-backdrop{position:fixed;inset:0;background:#1911239c;backdrop-filter:blur(5px);z-index:80;display:flex;align-items:center;justify-content:center;padding:25px}
+.prisma-app .modal{max-width:520px;width:100%;padding:32px;position:relative;max-height:90vh;overflow:auto;box-shadow:0 30px 70px #180d302f}
+.prisma-app .modal.wide{max-width:760px}
+.prisma-app .modal.small{max-width:420px}
+.prisma-app .modal-close{position:absolute;right:15px;top:15px}
+.prisma-app .modal h2{font-size:24px;letter-spacing:-.7px;font-weight:500;margin:18px 0}
+.prisma-app .modal p{font-size:12px;color:#9a89a8;line-height:1.8}
+.prisma-app .modal ol{padding-left:20px}
+.prisma-app .modal li{padding:10px 0;font-size:12px;color:#90789f}
+.prisma-app .modal li strong{font-weight:600;color:#786087}
+.prisma-app .modal li p{font-size:11px;margin:5px 0}
+.prisma-app .modal pre{font-size:10px;line-height:1.8;background:#f6f2f9;padding:18px;margin:20px 0;border-radius:7px;max-height:50vh;overflow:auto}
+.prisma-app .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:25px}
+.prisma-app .license-link{font-size:9px;color:#b3a2be;display:flex;align-items:center;justify-content:center;gap:5px;margin-top:17px}
+.prisma-app .spin{animation:spin 1.2s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}
+}
+.prisma-app .app-loading{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:25px;color:#9c85ad}
+.prisma-app .app-loading p{font-size:12px}
+.prisma-app .login-page{min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr}
+.prisma-app .login-art{background:#1d1b29;min-height:100vh;padding:45px 60px;color:#f5f1fb;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.prisma-app .login-art>.logo{position:relative;z-index:2}
+.prisma-app .login-art-text{position:relative;z-index:2;margin-top:clamp(70px,15vh,160px)}
+.prisma-app .login-art-text .badge{color:#a68ec8;font-size:9px;letter-spacing:2px}
+.prisma-app .login-art h1{font-size:clamp(45px,4.8vw,72px);font-weight:500;letter-spacing:-3px;line-height:1.12;margin:25px 0}
+.prisma-app .login-art h1 em{font-style:normal;color:#b69ad7}
+.prisma-app .login-art-text p{font-size:13px;color:#8c8399;line-height:1.9}
+.prisma-app .login-chips{display:flex;gap:8px;margin-top:30px}
+.prisma-app .login-chips span{display:flex;align-items:center;gap:7px;border:1px solid #42344d;background:#ffffff03;border-radius:6px;padding:7px 11px;font-size:10px;color:#a995bb}
+.prisma-app .login-art-footer{position:relative;z-index:2;margin-top:auto;padding-top:80px;display:flex;justify-content:space-between;font-size:7px;letter-spacing:1.3px;color:#706378}
+.prisma-app .prism-art{position:absolute;inset:0;overflow:hidden;opacity:.4}
+.prisma-app .prism-art i{position:absolute;right:-30%;bottom:8%;width:420px;height:450px;border:75px solid #8e63b1;border-radius:25%;transform:rotate(35deg);box-shadow:10px 10px 60px #e0aedc11,inset 10px 0 50px #e0b1d81a}
+.prisma-app .prism-art i:nth-child(2){right:-30%;bottom:-30%;border-color:#cb8cae}
+.prisma-app .prism-art i:nth-child(3){right:-80%;bottom:30%;border-color:#6b5b9e}
+.prisma-app .prism-art i:nth-child(4){display:none}
+.prisma-app .login-form-side{display:flex;align-items:center;justify-content:center;flex-direction:column;background:#fbfafc;position:relative;padding:60px}
+.prisma-app .login-form-wrap{max-width:350px;width:100%;margin:auto}
+.prisma-app .login-lock{width:52px;height:52px;background:#f0e9f8;color:#ad8fcd;border:1px solid #e9dff3;border-radius:13px;display:flex;align-items:center;justify-content:center;margin-bottom:28px}
+.prisma-app .login-form-wrap h2{font-size:29px;letter-spacing:-1px;font-weight:600;color:#382c43}
+.prisma-app .login-form-wrap>p{font-size:12px;color:#a99aaf;line-height:1.8;margin-top:12px}
+.prisma-app .login-form-wrap form{margin-top:35px;display:flex;flex-direction:column;gap:22px}
+.prisma-app .login-form-wrap label{font-size:11px;color:#8f799d}
+.prisma-app .login-form-wrap input{font-size:12px;padding:13px!important;background:white}
+.prisma-app .password-input{position:relative;margin-top:8px}
+.prisma-app .password-input>input{padding-right:45px!important}
+.prisma-app .password-input>button{position:absolute;right:13px;top:14px;color:#b6a4c1}
+.prisma-app .login-button{margin-top:3px;justify-content:space-between;padding:12px 16px}
+.prisma-app .secure-login{font-size:9px;color:#b8aabc;display:flex;align-items:center;gap:7px;padding-top:25px;margin-top:27px;border-top:1px solid #eee6f2}
+.prisma-app .secure-login svg{color:#b1c1ae}
+.prisma-app .login-form-side footer{width:100%;display:flex;justify-content:space-between;font-size:9px;color:#c7bdce;gap:25px;padding-top:65px}
+.prisma-app .login-form-side footer span{font-size:8px;letter-spacing:1px}
+@media(min-width:1500px){.prisma-app .workspace{padding-left:55px;padding-right:55px}
+.prisma-app .hero-panel{height:270px}
+.prisma-app .hero-visual{transform:scale(1.1)}
+.prisma-app .tool-card{min-height:200px}
+.prisma-app .tool-card h3{font-size:14px}
+.prisma-app .tool-card>p{font-size:11px}
+.prisma-app .sidebar{width:250px}
+.prisma-app .app-main{margin-left:250px}
+}
+@media(max-width:1150px){.prisma-app .sidebar{width:210px;padding-left:13px;padding-right:13px}
+.prisma-app .app-main{margin-left:210px}
+.prisma-app .sidebar nav button{font-size:10px}
+.prisma-app .sidebar-lab{margin-top:25px}
+.prisma-app .owner{margin-left:-13px;margin-right:-13px;padding:18px 10px}
+.prisma-app .workspace{padding:28px 25px}
+.prisma-app .topbar{padding:0 25px}
+.prisma-app .page-heading h1{font-size:26px}
+.prisma-app .hero-panel{padding:26px;height:245px}
+.prisma-app .hero-panel h2{font-size:24px}
+.prisma-app .hero-visual{transform:scale(.9);transform-origin:center}
+.prisma-app .tool-grid{gap:12px}
+.prisma-app .tool-card{padding:16px 15px 0}
+.prisma-app .tool-access{font-size:7px}
+.prisma-app .tool-card>p{font-size:9px}
+.prisma-app .editor-layout{grid-template-columns:minmax(0,1fr) 270px;gap:16px}
+.prisma-app .library-grid{grid-template-columns:1fr 1fr}
+.prisma-app .experiment-layout{grid-template-columns:330px 1fr}
+.prisma-app .login-art{padding:40px}
+.prisma-app .login-form-side{padding:40px}
+.prisma-app .stat-row>.panel{padding:16px 12px;gap:10px}
+.prisma-app .stat-row strong{font-size:20px}
+.prisma-app .stat-row small{font-size:8px}
+}
+@media(max-width:900px){.prisma-app .sidebar{width:185px;padding:28px 10px 0}
+.prisma-app .sidebar>.logo{margin-left:8px}
+.prisma-app .logo>span:last-child{font-size:19px}
+.prisma-app .logo small{font-size:7px}
+.prisma-app .sidebar nav button{padding:11px 10px;font-size:9px;gap:9px}
+.prisma-app .sidebar nav button svg{width:16px}
+.prisma-app .sidebar-lab{padding:16px 12px}
+.prisma-app .sidebar-lab strong{font-size:11px}
+.prisma-app .sidebar-lab p{font-size:9px}
+.prisma-app .sidebar-label{font-size:7px;margin-left:10px}
+.prisma-app .app-main{margin-left:185px}
+.prisma-app .tool-grid{grid-template-columns:1fr 1fr}
+.prisma-app .hero-panel{grid-template-columns:1fr .8fr}
+.prisma-app .hero-panel h2{font-size:23px}
+.prisma-app .hero-visual{transform:scale(.72)}
+.prisma-app .hero-panel p{font-size:9px}
+.prisma-app .page-heading h1{font-size:23px}
+.prisma-app .page-heading>.primary{font-size:10px;padding:10px}
+.prisma-app .editor-layout{grid-template-columns:1fr}
+.prisma-app .settings-panel{max-width:none}
+.prisma-app .control-group{padding:22px}
+.prisma-app .preset-swatch{height:60px}
+.prisma-app .settings-panel .preset-grid{max-width:350px}
+.prisma-app .experiment-layout{grid-template-columns:1fr}
+.prisma-app .security-card{padding:23px}
+.prisma-app .stat-row{gap:10px}
+.prisma-app .stat-row svg{display:none}
+.prisma-app .compare-action{align-items:flex-start;flex-wrap:wrap}
+.prisma-app .compare-action p{max-width:none}
+.prisma-app .login-art h1{font-size:49px}
+.prisma-app .login-art{padding:35px}
+.prisma-app .login-form-side{padding:35px}
+.prisma-app .login-form-wrap h2{font-size:25px}
+}
+@media(max-width:680px){.prisma-app .sidebar{display:none;width:235px;box-shadow:10px 0 50px #17112150}
+.prisma-app .sidebar.is-open{display:flex}
+.prisma-app .app-main{margin-left:0}
+.prisma-app .mobile-menu{display:flex}
+.prisma-app .topbar{height:61px;padding:0 18px}
+.prisma-app .topbar>div{gap:10px}
+.prisma-app .top-brand{display:none}
+.prisma-app .topbar .private-pill{font-size:8px;padding:4px 7px}
+.prisma-app .top-avatar{display:none}
+.prisma-app .workspace{padding:25px 19px}
+.prisma-app .page-heading{align-items:flex-start;gap:12px}
+.prisma-app .page-heading h1{font-size:25px;max-width:300px}
+.prisma-app .page-heading p:not(.eyebrow){font-size:10px;line-height:1.7}
+.prisma-app .page-heading>.primary{font-size:0;min-width:37px;padding:8px;margin-top:22px}
+.prisma-app .page-heading>.primary svg{width:17px}
+.prisma-app .hero-panel{padding:25px 23px;grid-template-columns:1fr;height:257px}
+.prisma-app .hero-panel>div:first-child{position:relative;z-index:2}
+.prisma-app .hero-panel h2{font-size:24px;max-width:240px}
+.prisma-app .hero-visual{position:absolute;right:-55px;top:75px;bottom:10px;width:220px;opacity:.42;transform:scale(.75)}
+.prisma-app .hero-panel p{max-width:220px;font-size:9px}
+.prisma-app .hero-button{position:relative;z-index:3}
+.prisma-app .hero-panel .badge{font-size:7px}
+.prisma-app .section-heading{align-items:flex-start}
+.prisma-app .section-heading h2{font-size:16px}
+.prisma-app .section-heading p{font-size:9px}
+.prisma-app .search{width:150px}
+.prisma-app .search input{font-size:9px!important}
+.prisma-app .categories{gap:1px;overflow:auto}
+.prisma-app .categories button{font-size:9px;padding:6px 10px;white-space:nowrap}
+.prisma-app .tool-grid{gap:11px}
+.prisma-app .tool-card{min-height:185px;padding:15px 13px 0}
+.prisma-app .tool-card h3{font-size:11px}
+.prisma-app .tool-card-top{margin-bottom:12px}
+.prisma-app .tool-icon{width:32px;height:32px;border-radius:8px}
+.prisma-app .tool-icon svg{width:19px}
+.prisma-app .tool-access{font-size:0}
+.prisma-app .tool-access svg{width:12px}
+.prisma-app .tool-card>p{font-size:9px;line-height:1.7}
+.prisma-app .tool-card-footer>span{font-size:6px;letter-spacing:.3px}
+.prisma-app .tool-card-footer svg{width:12px}
+.prisma-app .workspace-footnote{font-size:8px;align-items:flex-start;line-height:1.7}
+.prisma-app .workspace-footnote>svg{flex-shrink:0}
+.prisma-app .workspace-footnote>button{display:none}
+.prisma-app .main-footer{margin:0 19px;font-size:7px;gap:12px}
+.prisma-app .main-footer>span:nth-child(2){display:none}
+.prisma-app .stat-row{gap:8px}
+.prisma-app .stat-row>.panel{padding:15px 10px}
+.prisma-app .stat-row strong{font-size:17px}
+.prisma-app .stat-row small{font-size:8px}
+.prisma-app .library-grid{grid-template-columns:1fr}
+.prisma-app .library-preview{height:230px}
+.prisma-app .compare-inputs{gap:12px}
+.prisma-app .compare-drop{padding:25px 12px}
+.prisma-app .compare-drop h3{font-size:12px}
+.prisma-app .compare-drop>strong{font-size:9px}
+.prisma-app .compare-drop>small{font-size:8px}
+.prisma-app .comparison-detail{padding:0 15px 15px}
+.prisma-app .comparison-detail .panel-heading{align-items:flex-start}
+.prisma-app .comparison-detail .panel-heading button{font-size:9px}
+.prisma-app .security-grid{grid-template-columns:1fr}
+.prisma-app .toast{bottom:18px;max-width:calc(100% - 26px);font-size:11px;padding:14px}
+.prisma-app .modal-backdrop{padding:15px}
+.prisma-app .modal{padding:25px}
+.prisma-app .modal h2{font-size:22px}
+.prisma-app .dropzone{min-height:300px}
+.prisma-app .dropzone h3{font-size:15px}
+.prisma-app .dropzone small{font-size:8px}
+.prisma-app .login-page{grid-template-columns:1fr}
+.prisma-app .login-art{display:none}
+.prisma-app .login-form-side{min-height:100vh;padding:35px}
+.prisma-app .login-form-wrap{max-width:360px}
+.prisma-app .login-form-side footer{padding-top:50px}
+.prisma-app .login-form-wrap h2{font-size:30px}
+.prisma-app .progress-panel>div{flex-wrap:wrap}
+.prisma-app .progress-panel strong{font-size:10px}
+.prisma-app .control-group .preset-swatch{height:55px}
+}
+@media(prefers-reduced-motion:reduce){.prisma-app *{transition:none!important;animation:none!important}
+}
+.prisma-app .login-tip{font-size:11px;line-height:1.6;color:#74647e;margin-top:-8px}
+.prisma-app .randomize-block{padding:20px 22px;background:linear-gradient(140deg,#f7f3ff,#fff);border-bottom:1px solid #eee7f6}
+.prisma-app .randomize-button{width:100%;display:flex;gap:9px;align-items:center;justify-content:center;padding:12px 14px;border:1px solid #c1a7ee;border-radius:8px;background:#eee5ff;color:#5f3ca3;font-size:12px;font-weight:600;transition:background .15s}
+.prisma-app .randomize-button:hover{background:#e4d5ff}
+.prisma-app .randomize-block p{font-size:10px;color:#82728e;line-height:1.65;margin-top:9px}
+.prisma-app .randomized-badge{display:inline-flex;margin-top:9px;color:#7959ae;font-size:9px;border:1px solid #dfd1ef;border-radius:4px;padding:3px 6px}
+.prisma-app .before-after{margin-top:20px;overflow:hidden;scroll-margin-top:100px}
+.prisma-app .preview-ready{display:flex;align-items:center;gap:5px;color:#57856d;font-size:9px}
+.prisma-app .preview-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;padding:18px 20px}
+.prisma-app .preview-modes{display:flex;padding:3px;background:#f0edf5;border-radius:7px;align-self:center}
+.prisma-app .preview-modes button{display:flex;align-items:center;gap:6px;font-size:11px;padding:8px 10px;border-radius:5px;color:#877791}
+.prisma-app .preview-modes button[aria-pressed=true]{background:#fff;color:#7046b3;box-shadow:0 1px 4px #21103012}
+.prisma-app .preview-time{font-size:9px;color:#82728e;width:94px}
+.prisma-app .preview-time input{margin-top:5px!important;padding:7px 9px!important;font-size:11px!important}
+.prisma-app .preview-toolbar>.secondary{margin-left:auto;font-size:10px;padding:9px 11px}
+.prisma-app .before-after-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;padding:0 20px;transition:opacity .2s}
+.prisma-app .before-after-grid.is-stale{opacity:.55}
+.prisma-app .before-after-grid figure{margin:0;min-width:0}
+.prisma-app .before-after-grid figcaption{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#63516f;padding:10px 0}
+.prisma-app .before-after-grid figcaption small{margin-left:auto;font-weight:400;color:#9888a2;font-size:9px}
+.prisma-app .preview-dot{width:6px;height:6px;background:#b6adb9;border-radius:100%}
+.prisma-app .preview-dot.edited{background:#9b72df}
+.prisma-app .preview-media{background:#181620;border-radius:8px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
+.prisma-app .preview-media img,.prisma-app .preview-media video{width:100%;height:100%;object-fit:contain}
+.prisma-app .preview-note{padding:15px 20px 18px;font-size:10px;line-height:1.7;color:#8f7e9b}
+.prisma-app .preview-empty{margin:0 20px 20px;padding:36px 20px;text-align:center;background:#faf8fd;border:1px dashed #ddd1eb;border-radius:10px;color:#a08bb3}
+.prisma-app .preview-empty>svg{margin:0 auto 12px}
+.prisma-app .preview-empty h4{font-size:13px;font-weight:500;color:#766381}
+.prisma-app .preview-empty p{font-size:10px;line-height:1.8;max-width:320px;margin:10px auto 0}
+.prisma-app .preview-stale{margin:0 20px 8px;padding:9px 12px;border-radius:6px;background:#fff5df;color:#99722d;font-size:10px}
+.prisma-app .preview-playback{padding:14px 20px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.prisma-app .preview-playback .secondary{font-size:10px;padding:7px 9px}
+.prisma-app .preview-playback span{font-size:9px;color:#9a89a5}
+.prisma-app .randomize-button:disabled,.prisma-app .preview-toolbar button:disabled{opacity:.5;cursor:wait}
+@media(max-width:680px){.prisma-app .preview-toolbar{gap:10px;padding:15px}
+.prisma-app .before-after-grid{gap:8px;padding:0 15px}
+.prisma-app .before-after-grid figcaption{flex-wrap:wrap;font-size:10px}
+.prisma-app .before-after-grid figcaption small{width:100%;margin-left:12px;font-size:8px}
+.prisma-app .preview-note{padding:13px 15px;font-size:9px}
+.prisma-app .preview-ready{font-size:8px}
+.prisma-app .preview-modes button{font-size:10px;padding:7px 8px}
+.prisma-app .preview-toolbar>.secondary{margin-left:0}
+.prisma-app .preview-stale{margin:0 15px 8px}
+.prisma-app .preview-time{width:76px}
+.prisma-app .preview-media{aspect-ratio:3/4}
+}
+.prisma-app .template-intro{display:flex;align-items:center;gap:18px;padding:22px;margin-bottom:25px}
+.prisma-app .template-intro>div:nth-child(2){flex:1}
+.prisma-app .template-intro strong{font-size:14px}
+.prisma-app .template-intro p{font-size:12px;color:var(--muted);margin-top:5px;max-width:660px}
+.prisma-app .profile-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(225px,1fr));gap:22px}
+.prisma-app .profile-card{overflow:hidden;text-align:center;padding-bottom:22px;position:relative}
+.prisma-app .profile-card-cover{height:100px;background:#242130;position:relative;overflow:hidden}
+.prisma-app .profile-card-cover img{width:100%;height:100%;object-fit:cover;opacity:.25;filter:blur(5px)}
+.prisma-app .profile-card-cover span{position:absolute;right:12px;top:12px;color:#fff;font-size:8px;letter-spacing:1px;background:#ffffff18;border:1px solid #ffffff25;border-radius:4px;padding:4px 7px}
+.prisma-app .profile-avatar{width:85px;height:85px;object-fit:cover;border:4px solid #fff;border-radius:50%;position:relative;margin:-42px auto 11px;display:block}
+.prisma-app .profile-card h3{font-size:15px;overflow-wrap:anywhere;padding:0 15px}
+.prisma-app .profile-card p{font-size:11px;color:var(--muted);margin:5px 0 18px}
+.prisma-app .profile-card>div:last-child{display:flex;align-items:center;justify-content:center;gap:12px}
+.prisma-app .profile-form h2{margin-bottom:8px}
+.prisma-app .profile-form>p:not(.eyebrow){font-size:12px;color:var(--muted)}
+.prisma-app .profile-form form{margin-top:24px}
+.prisma-app .profile-form label{margin-bottom:20px}
+.prisma-app .avatar-upload{display:flex;flex-direction:column;align-items:center;gap:12px;margin:0 auto;color:var(--purple)}
+.prisma-app .avatar-upload img{height:120px;width:120px;border-radius:50%;object-fit:cover;border:5px solid var(--purple-pale)}
+.prisma-app .avatar-upload>svg{padding:30px;width:120px;height:120px;border-radius:50%;background:var(--purple-pale);border:1px dashed #b7a5e5}
+.prisma-app .avatar-upload span{font-size:12px;font-weight:600}
+.prisma-app .photo-hint{display:block;text-align:center;color:var(--muted);font-size:10px;margin:12px 0 24px}
+.prisma-app .handle-field{position:relative;margin-top:8px}
+.prisma-app .handle-field>svg{position:absolute;top:13px;left:12px;color:var(--purple)}
+.prisma-app .handle-field>input{padding-left:38px!important}
+.prisma-app .profile-workflow{display:flex;align-items:center;gap:13px;padding:14px 18px;background:#f0edf8;border:1px solid #e7e0f4;border-radius:10px;margin-bottom:24px;font-size:11px;color:#77688d}
+.prisma-app .profile-workflow>span{display:flex;align-items:center;gap:8px}
+.prisma-app .profile-workflow b{display:grid;place-items:center;background:#fff;border:1px solid #e4ddee;border-radius:50%;height:23px;width:23px;font-size:10px}
+.prisma-app .profile-workflow>i{height:1px;width:20px;background:#d6cce5}
+.prisma-app .profile-workflow>strong{margin-left:auto;font-size:9px;letter-spacing:1px}
+.prisma-app .template-picker .panel-heading>span{font-size:10px;color:var(--muted)}
+.prisma-app .template-selected{display:flex;align-items:center;gap:15px;padding:19px}
+.prisma-app .template-selected>img{height:55px;width:55px;object-fit:cover;border-radius:50%;border:3px solid #eee8f8}
+.prisma-app .template-selected>label{flex:1}
+.prisma-app .template-selected select{margin-top:5px}
+.prisma-app .template-empty{padding:25px;text-align:center}
+.prisma-app .template-empty p{font-size:12px;color:var(--muted);margin-bottom:14px}
+.prisma-app .composition-stage{display:grid;grid-template-columns:minmax(170px,280px) 1fr;gap:28px;padding:25px;align-items:center;background:#faf9fc}
+.prisma-app .reel-composition{position:relative;aspect-ratio:9/16;width:100%;overflow:hidden;background:#15141c;border-radius:10px;box-shadow:0 8px 24px #18112218}
+.prisma-app .reel-composition>video{position:absolute;left:0;width:100%;background:#16141d}
+.prisma-app .composition-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.prisma-app .composition-placeholder{position:absolute;left:10px;top:20px;right:10px;color:white;text-align:center;font-size:12px}
+.prisma-app .composition-explainer h3{font-size:20px;line-height:1.35;margin:12px 0}
+.prisma-app .composition-explainer p{font-size:12px;color:#878390;line-height:1.75;margin-bottom:13px}
+.prisma-app .composition-explainer>strong{display:block;font-size:11px;overflow-wrap:anywhere;margin-top:25px}
+.prisma-app .composition-explainer>small{font-size:10px;color:var(--muted)}
+.prisma-app .template-source-note{padding:14px 20px;font-size:11px;color:#8a8593;border-top:1px solid var(--line)}
+.prisma-app .profile-layout-controls{background:#faf8fe;padding-top:18px!important}
+.prisma-app .profile-layout-controls h4{display:flex;align-items:center;gap:8px;color:#7c65ad}
+.prisma-app .profile-layout-controls textarea{resize:vertical;min-height:82px}
+.prisma-app .reels-format{display:flex;align-items:center;justify-content:space-between;background:#f4f1fa;border:1px solid #e6def3;padding:12px;border-radius:8px;margin:10px 0 15px}
+.prisma-app .reels-format strong{font-size:14px;color:#74599c}
+.prisma-app .reels-format span{font-size:9px;color:#9382a9}
+.prisma-app .batch-all-button{margin-top:10px;background:#f2edf9}
+.prisma-app .batch-policy{padding:14px 20px;border-bottom:1px solid var(--line);font-size:11px;color:var(--muted)}
+.prisma-app .batch-row{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid #f1eef6}
+.prisma-app .batch-row>img{height:40px;width:40px;object-fit:cover;border-radius:50%}
+.prisma-app .batch-row>div{flex:1;min-width:0}
+.prisma-app .batch-row strong{display:block;font-size:12px;overflow-wrap:anywhere}
+.prisma-app .batch-row small{display:block;font-size:10px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.prisma-app .batch-row .batch-warning{color:#aa7925}
+.prisma-app .batch-row>svg{color:#ad9ac8;flex-shrink:0}
+.prisma-app .batch-row>svg.batch-success{color:#74a48b}
+.prisma-app .batch-row progress{height:4px;margin-top:6px}
+.prisma-app .batch-row .secondary{padding:8px 10px;font-size:10px;min-height:34px}
+.prisma-app .batch-retry{margin:18px 20px}
+.prisma-app .progress-panel button{display:flex;align-items:center;gap:5px}
+.prisma-app .profile-source,.prisma-app .template-picker,.prisma-app .batch-results{overflow:hidden}
+.prisma-app .profile-card h3,.prisma-app .template-selected select{max-width:100%}
+@media(max-width:1150px){.prisma-app .composition-stage{grid-template-columns:minmax(160px,230px) 1fr;gap:18px;padding:18px}
+.prisma-app .composition-explainer h3{font-size:17px}
+.prisma-app .profile-workflow>strong{display:none}
+}
+@media(max-width:720px){.prisma-app .template-intro{flex-wrap:wrap}
+.prisma-app .template-intro>div:nth-child(2){min-width:200px}
+.prisma-app .template-intro>.secondary{width:100%}
+.prisma-app .profile-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.prisma-app .profile-card h3{font-size:12px}
+.prisma-app .profile-workflow{gap:8px;flex-wrap:wrap;font-size:10px}
+.prisma-app .profile-workflow>i{width:10px}
+.prisma-app .profile-workflow b{height:20px;width:20px}
+.prisma-app .composition-stage{grid-template-columns:1fr}
+.prisma-app .reel-composition{max-width:270px;margin:auto}
+.prisma-app .composition-explainer{padding:0 8px}
+.prisma-app .composition-explainer h3{font-size:18px}
+.prisma-app .composition-explainer>strong{margin-top:10px}
+.prisma-app .batch-row{padding:14px 12px;gap:9px}
+.prisma-app .batch-row>img{width:33px;height:33px}
+.prisma-app .batch-row>svg{display:none}
+.prisma-app .template-selected{padding:15px}
+.prisma-app .profile-form{padding:25px!important}
+.prisma-app .template-picker .panel-heading{flex-wrap:wrap}
+}
+@media(max-width:390px){.prisma-app .profile-grid{grid-template-columns:1fr}
+.prisma-app .profile-workflow{display:none}
+}
+.prisma-app .profile-avatar-canvas{display:block;border-radius:50%;background:#eee8f3;flex-shrink:0}
+.prisma-app .profile-crop-editor{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:14px;margin:0 0 24px;padding:16px;background:#faf8fe;border:1px solid #e8e0f1;border-radius:10px}
+.prisma-app .crop-stage{position:relative;overflow:hidden;align-self:start;touch-action:none;cursor:crosshair;border-radius:7px;line-height:0}
+.prisma-app .crop-stage>img{width:100%;height:auto;display:block;max-height:350px;object-fit:contain}
+.prisma-app .crop-guide{position:absolute;pointer-events:none;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 999px #100e1c88,0 0 0 3px #9273c9}
+.prisma-app .crop-result{align-self:center;text-align:center}
+.prisma-app .crop-result canvas{width:104px;height:104px;border:3px solid #d6c4ee;margin:0 auto 8px}
+.prisma-app .crop-result span{font-size:9px;color:#92849e}
+.prisma-app .profile-crop-editor>p,.prisma-app .profile-crop-editor>label,.prisma-app .profile-crop-editor>button,.prisma-app .profile-crop-editor>small{grid-column:1/-1}
+.prisma-app .profile-crop-editor>p{font-size:10px!important;line-height:1.6!important;color:#94879f!important}
+.prisma-app .profile-crop-editor label{margin:0!important;font-size:11px;display:block}
+.prisma-app .profile-crop-editor output{float:right}
+.prisma-app .profile-crop-editor input[type=range]{width:100%;margin-top:7px!important}
+.prisma-app .profile-crop-editor>small{font-size:10px;color:#82718f;line-height:1.5}
+.prisma-app .profile-form .avatar-upload{margin:0 auto}
+.prisma-app .profile-form .photo-hint{margin-bottom:16px}
+@media(max-width:420px){.prisma-app .profile-crop-editor{grid-template-columns:minmax(0,1fr) 85px;padding:12px;gap:10px}
+.prisma-app .crop-result canvas{width:80px;height:80px}
+}
+.prisma-app .crop-stage>img{max-height:none}
+.prisma-app .template-selected>.profile-avatar-canvas{height:55px;width:55px;border:3px solid #eee8f8}
+.prisma-app .batch-row>.profile-avatar-canvas{height:40px;width:40px}
+@media(max-width:720px){.prisma-app .batch-row>.profile-avatar-canvas{height:33px;width:33px}
+}
+

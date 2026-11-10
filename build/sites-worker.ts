@@ -1,0 +1,33 @@
+import handler from "vinext/server/fetch-handler";
+import { runWithConnectorBinding } from "../lib/connector-context";
+import type { ConnectorBinding } from "../lib/connector-contract.mjs";
+
+export default {
+  fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+    let binding = ctx.props?.CONNECTORS;
+    // Local preview emulates the same request-scoped capability. This branch and
+    // the auxiliary service binding are absent from production builds.
+    if (import.meta.env.DEV && !binding && env.CONNECTORS) {
+      const preview = env.CONNECTORS;
+      const expiresAt = Date.now() + 60_000;
+      binding = {
+        async getContext() {
+          if (Date.now() >= expiresAt) return { status: "request_context_expired" };
+          return preview.getContext?.() ?? { status: "binding_unavailable" };
+        },
+        async invoke(connectorId, actionName, args) {
+          if (Date.now() >= expiresAt) {
+            return { status: "request_context_expired", message: "This request has expired. Please try again." };
+          }
+          return preview.invoke(connectorId, actionName, args);
+        },
+      };
+    }
+    const path = new URL(request.url).pathname.replace(/\/$/, "");
+    const responsePromise = runWithConnectorBinding(binding, async () => { const response=await handler.fetch(request, env, ctx);if(path!=='/prisma')return response;const headers=new Headers(response.headers);headers.set('Cross-Origin-Opener-Policy','same-origin');headers.set('Cross-Origin-Embedder-Policy','require-corp');headers.set('Cross-Origin-Resource-Policy','same-origin');return new Response(response.body,{status:response.status,statusText:response.statusText,headers}); });
+    if (request.method === "POST" && (path === "/api/runner" || path === "/api/app")) {
+      ctx.waitUntil(responsePromise.then(() => undefined));
+    }
+    return responsePromise;
+  },
+};

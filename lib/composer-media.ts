@@ -1,0 +1,4 @@
+type Asset={id:string;mime:string};
+export function compatibleMedia(format:string,media:Asset){return format==='video'?media.mime.startsWith('video/'):(format==='story'||format==='carousel')?/^(video|image)\//.test(media.mime):media.mime.startsWith('image/');}
+export function normalizeMedia(ids:string[],format:string,media:Asset[]){const index=new Map(media.map(m=>[m.id,m]));return [...new Set(ids)].filter(id=>{const m=index.get(id);return !!m&&compatibleMedia(format,m);}).slice(0,format==='carousel'?10:1);}
+export function selectMedia(ids:string[],id:string,format:string,media:Asset[]){const m=media.find(m=>m.id===id);if(!m||!compatibleMedia(format,m))return normalizeMedia(ids,format,media);if(format!=='carousel')return [id];return normalizeMedia(ids.includes(id)?ids.filter(x=>x!==id):[...ids,id],format,media);}

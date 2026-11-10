@@ -1,0 +1,4 @@
+MediaPipe Tasks Vision 0.10.21, Apache-2.0. https://github.com/google-ai-edge/mediapipe
+BlazeFace short range model: https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite
+Model card: https://storage.googleapis.com/mediapipe-assets/MediaPipe_Face_Detection_Short_Range_Model_Card.pdf
+Images are processed locally in the browser. No photo upload to Google.

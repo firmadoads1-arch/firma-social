@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.resolve('wrangler/package.json')),{build}=require('esbuild');
+const bundle=await build({entryPoints:['lib/prisma/background-tasks.ts'],bundle:true,write:false,format:'esm',platform:'node'});
+const {BackgroundTasks}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const queue=new BackgroundTasks(2),releases=[],completed=[];let running=0,peak=0;
+const save=id=>async()=>{peak=Math.max(peak,++running);await new Promise(resolve=>releases.push(resolve));running--;completed.push(id);};
+await queue.add(save(1));await queue.add(save(2));
+assert.equal(running,2);assert.deepEqual(completed,[],'enqueue must allow the renderer to continue before an upload finishes');
+let thirdStarted=false;const third=queue.add(async()=>{thirdStarted=true;completed.push(3);});
+await Promise.resolve();assert.equal(thirdStarted,false,'queue must apply backpressure');
+releases[0]();await third;releases[1]();await queue.drain();
+assert.equal(peak,2);assert.deepEqual(new Set(completed),new Set([1,2,3]));
+await queue.add(async()=>{throw Error('upload failed');});await assert.rejects(()=>queue.drain(),AggregateError);
+const controller=new AbortController();let cancelled=false;
+await queue.add(async()=>{try{await new Promise((_,reject)=>controller.signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true}));}catch{cancelled=true;}});
+controller.abort();await queue.drain();assert.equal(cancelled,true);
+console.log('PASS rendering/upload overlap, max two pending saves, backpressure, error propagation and cancellation');

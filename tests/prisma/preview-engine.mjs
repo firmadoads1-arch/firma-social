@@ -1,0 +1,29 @@
+// Runs the production media pipeline with the exact FFmpeg WASM binary in Node.
+// Only browser transport and unchanged canvas title generation are replaced by fixtures.
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createRequire} from 'node:module';
+import createCore from '../../node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js';
+const require=createRequire(import.meta.resolve('wrangler/package.json'));const {build}=require('esbuild');
+globalThis.self={location:{href:'http://localhost/'}};
+const core=await createCore({wasmBinary:fs.readFileSync('node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm')});
+core.setLogger(({message})=>globalThis.__prismaLog?.(message));
+const exec=(args)=>{core.setTimeout(600000);core.exec(...args);const ret=core.ret;core.reset();return ret;};
+globalThis.__prismaEngine={loaded:true,writeFile:async(n,b)=>core.FS.writeFile(n,b),readFile:async(n,encoding='binary')=>core.FS.readFile(n,{encoding}),deleteFile:async(n)=>core.FS.unlink(n),exec:async(args)=>exec(args),ffprobe:async(args)=>{core.ffprobe(...args);const ret=core.ret;core.reset();return ret;}};
+globalThis.__prismaBoard=async(_text,w,h)=>{const name='fixture-title.png';assert.equal(exec(['-v','error','-f','lavfi','-i',`color=c=0x7755bb:s=${w}x${h}`,'-frames:v','1',name]),0);const data=new Uint8Array(core.FS.readFile(name));core.FS.unlink(name);return data;};
+const bundle=await build({stdin:{contents:"export * from './lib/prisma/media.ts';export * from './lib/prisma/randomize.ts';export {defaults} from './lib/prisma/catalog.ts';",resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'wasm-transport-fixture',setup(b){b.onLoad({filter:/lib\/prisma\/media\.ts$/},({path})=>{let s=fs.readFileSync(path,'utf8');const a=s.indexOf('export async function loadEngine('),z=s.indexOf('const ext=');s=s.slice(0,a)+"export async function loadEngine(){globalThis.__prismaLog=(m)=>logs.push(m);return globalThis.__prismaEngine;}\n"+s.slice(z);const x=s.indexOf('async function board('),y=s.indexOf('function withExif(');s=s.slice(0,x)+'async function board(text,w,h){return globalThis.__prismaBoard(text,w,h);}\n'+s.slice(y);return{contents:s,loader:'ts',resolveDir:process.cwd()+'/lib/prisma'};});}}]});
+const {processMedia,inspect,defaults,randomizeSettings}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const progress=()=>{};
+async function chroma(blob){core.FS.writeFile('chroma.jpg',new Uint8Array(await blob.arrayBuffer()));assert.equal(exec(['-v','error','-i','chroma.jpg','-frames:v','1','-pix_fmt','rgb24','-f','rawvideo','chroma.raw']),0);const p=core.FS.readFile('chroma.raw');let sum=0;for(let i=0;i<p.length;i+=3)sum+=Math.max(p[i],p[i+1],p[i+2])-Math.min(p[i],p[i+1],p[i+2]);core.FS.unlink('chroma.jpg');core.FS.unlink('chroma.raw');return sum/(p.length/3);}
+// Extend the committed 3-second synthetic sample to 6 seconds without changing source fixtures.
+core.FS.writeFile('demo.mp4',fs.readFileSync('outputs/prisma-qa/demo.mp4'));assert.equal(exec(['-v','error','-stream_loop','1','-i','demo.mp4','-c','copy','six.mp4']),0);const demo=new File([new Uint8Array(core.FS.readFile('six.mp4'))],'demo.mp4',{type:'video/mp4'});core.FS.unlink('six.mp4');core.FS.unlink('demo.mp4');
+const [still]=await processMedia(demo,'advanced',{...defaults,maxSide:480,intro:1,outro:1,saturation:0,randomSeed:123},progress,{kind:'image',start:1});assert.equal(still.blob.type,'image/jpeg');assert.ok(await chroma(still.preview.before)>20);assert.ok(await chroma(still.blob)<5);console.log('PASS image preview: grayscale editing applied and intro skipped');
+const random=randomizeSettings({...defaults,maxSide:480},'advanced',235);
+const [video]=await processMedia(demo,'advanced',random,progress,{kind:'video',start:1});const before=await inspect(new File([video.preview.before],'before.mp4',{type:'video/mp4'}),progress);assert.ok(Math.abs(before.duration-3)<.15);assert.equal(video.preview.start,1);assert.ok(Math.abs(video.info.duration-3/random.speed)<.25);console.log('PASS video preview: three-second source window and edited speed');
+const [tail]=await processMedia(demo,'advanced',{...defaults,maxSide:480},progress,{kind:'video',start:5.5});assert.ok(tail.preview.sourceDuration<.6&&tail.info.duration<.75);console.log('PASS preview near end of video');
+const [trim]=await processMedia(demo,'trim',{...defaults,start:2,end:3,maxSide:480},progress,{kind:'video',start:0});assert.equal(trim.preview.start,2);assert.ok(Math.abs(trim.info.duration-1)<.15);console.log('PASS trim preview respects selected interval');
+const s=randomizeSettings({...defaults,maxSide:480},'variants',576);const pv=await processMedia(demo,'variants',s,progress,{kind:'video',start:0});assert.equal(pv.length,1);const full=await processMedia(new File([pv[0].preview.before],'short.mp4',{type:'video/mp4'}),'variants',s,progress);assert.equal(full.length,3);assert.equal(full[0].settings.randomSeed,pv[0].settings.randomSeed);console.log('PASS randomized batch: one preview and three full exports');
+const imageFile=new File([still.preview.before],'image.jpg',{type:'image/jpeg'});const [img]=await processMedia(imageFile,'image',{...defaults,flip:true,saturation:0},progress,{kind:'image',start:0});assert.equal(img.preview.kind,'image');assert.ok(await chroma(img.blob)<5);console.log('PASS uploaded image before/after');
+const [remux]=await processMedia(demo,'remux',defaults,progress,{kind:'video',start:1});assert.equal(remux.preview.sourceDuration,3);assert.ok(remux.info.duration<=3.15);console.log('PASS remux visual preview stays within three seconds');
+const [intro]=await processMedia(demo,'cloak',{...defaults,intro:1,outro:1,maxSide:480},progress,{kind:'video',start:0});assert.ok(Math.abs(intro.info.duration-5)<.2);console.log('PASS preview contains configured intro and outro');
+console.log('ALL PREVIEW ENGINE TESTS PASSED');

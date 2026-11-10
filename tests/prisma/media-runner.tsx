@@ -1,0 +1,24 @@
+'use client';
+import {useState} from 'react';
+import {processMedia,compareMedia,inspect,type Output} from '../../lib/prisma/media';
+import {defaults,type ToolId,type Settings} from '../../lib/prisma/catalog';
+export default function QATests(){const [log,setLog]=useState<string[]>([]),[busy,setBusy]=useState(false),[message,setMessage]=useState('');const run=async()=>{setBusy(true);setLog([]);const add=(m:string)=>setLog(s=>[...s,m]);let count=0;try{const demo=new File([await(await fetch('/demo.mp4')).blob()],'demo.mp4',{type:'video/mp4'});const progress=(n:number,m:string)=>setMessage(Math.round(n)+'% '+m);const test=async(id:ToolId,settings:Partial<Settings>={},file:File=demo)=>{const out=await processMedia(file,id,{...defaults,maxSide:480,...settings},progress);if(!out.length||out.some(o=>o.blob.size<20))throw Error(id+': empty result');add('PASS '+id+' — '+out.length+' result(s), '+out[0].blob.size+' bytes, '+out[0].info.duration.toFixed(2)+'s');count++;return out;};
+await test('cloak',{intro:.5,outro:.5,introText:'Abertura',outroText:'Encerramento',overlay:'TESTE'});
+await test('advanced',{contrast:1.1,saturation:.8,zoom:1.1,rotation:2,grain:2,speed:1.1,pitch:2,echo:true,bass:3,flip:true});
+const remux=await test('remux',{metaMode:'custom',title:'Prisma test'});
+const c=document.createElement('canvas');c.width=320;c.height=240;const g=c.getContext('2d')!;g.fillStyle='#A393D1';g.fillRect(0,0,320,240);g.fillStyle='#5b3550';g.fillRect(50,80,100,90);const imageBlob=await new Promise<Blob>(r=>c.toBlob(b=>r(b!),'image/jpeg'));const imageFile=new File([imageBlob],'image.jpg',{type:'image/jpeg'});
+await test('image',{contrast:1.2,grain:1,metaMode:'custom',title:'Test',make:'Camera',model:'Example',author:'QA'},imageFile);
+const audio=await test('audio',{pitch:2,echo:true,speed:1.1});
+await test('metadata',{metaMode:'custom',title:'QA metadata',author:'Prisma'});
+const variants=await test('variants');if(variants.length!==3)throw Error('Variants must return 3 files');
+await test('formats',{ratio:'9:16',fit:'blur'});
+const trim=await test('trim',{start:.5,end:1.5});if(Math.abs(trim[0].info.duration-1)>0.15)throw Error('Trim duration is incorrect');
+await test('compress',{crf:30,maxSide:320});
+await test('watermark',{rectX:10,rectY:10,rectW:20,rectH:20});
+const comparison=await compareMedia(demo,demo,progress);if(!comparison.identical||comparison.visual!==100||(comparison.ssim??0)<.99)throw Error('Identity comparison failed: '+JSON.stringify(comparison));add('PASS detector — SHA-256 identical, dHash 100%, SSIM '+comparison.ssim);count++;
+const remuxCompare=await compareMedia(demo,new File([remux[0].blob],remux[0].name,{type:remux[0].blob.type}),progress);if(remuxCompare.identical||remuxCompare.visual!==100||(remuxCompare.ssim??0)<.99)throw Error('Remux preservation failed');add('PASS remux: new byte hash, preserved frames');count++;
+const imgCompare=await compareMedia(imageFile,imageFile,progress);if(!imgCompare.identical||imgCompare.visual!==100)throw Error('Image identity comparison failed');add('PASS image comparison');count++;
+const aFile=new File([audio[0].blob],audio[0].name,{type:audio[0].blob.type});await test('trim',{start:.2,end:.7},aFile);
+let rejected=false;try{await processMedia(demo,'trim',{...defaults,start:2,end:1},progress);}catch{rejected=true;}if(!rejected)throw Error('Invalid interval not rejected');add('PASS invalid interval rejected');
+add('ALL '+count+' MEDIA CASES PASSED');setMessage('Complete');
+}catch(e){add('FAIL '+(e as Error).message);setMessage('Failed');}finally{setBusy(false);}};return <main style={{padding:35}}><h1>Local media verification</h1><p>Development fixture. Not published.</p><button className="primary" disabled={busy} onClick={run}>Executar testes de mídia</button><p>{message}</p><pre style={{whiteSpace:'pre-wrap'}}>{log.join('\n')}</pre></main>;}

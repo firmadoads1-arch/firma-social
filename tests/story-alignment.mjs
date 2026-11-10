@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {gridLines,centerPosition,snapPosition} from '../lib/story-alignment.ts';
+assert.equal(centerPosition(1080,800),140);
+assert.equal(centerPosition(1920,400),760);
+assert.equal(centerPosition(1080,1200),0);
+assert.equal(snapPosition(138,800,1080,120,true),140,'Exact center wins over grid rounding');
+assert.equal(snapPosition(125,200,1080,120,true),120);
+assert.equal(snapPosition(125,200,1080,120,false),125,'Free dragging remains available');
+assert.equal(snapPosition(-80,200,1080,120,true),0);
+assert.equal(snapPosition(900,800,1080,120,true),280,'Right edge remains inside Story');
+assert.equal(snapPosition(1900,400,1920,120,true),1520,'Actual layer height determines lower edge');
+assert.equal(snapPosition(130,1200,1080,60,true),0);
+assert.deepEqual(gridLines(1080,240),[240,480,720,960]);
+assert.equal(gridLines(1920,120).length,15);
+console.log('Story alignment: exact centers, free dragging, grid spacing and canvas boundaries passed.');

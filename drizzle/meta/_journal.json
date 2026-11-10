@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792270116205,
+      "tag": "0000_nosy_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792270166107,
+      "tag": "0001_blue_khan",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792309664564,
+      "tag": "0002_yellow_the_twelve",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793150959069,
+      "tag": "0003_tough_diamondback",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793152819450,
+      "tag": "0004_chief_black_cat",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793222326431,
+      "tag": "0005_elite_bastion",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793798770939,
+      "tag": "0006_workspace_groups_and_batches",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793981717701,
+      "tag": "0007_prisma_lab",
+      "breakpoints": true
+    }
+  ]
+}
