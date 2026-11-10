@@ -16,7 +16,9 @@ Workspace privado para preparar e agendar conteúdo próprio no Instagram, TikTo
 - Instagram: JPEG, carrosséis de imagens, Reels e Stories. Conta profissional necessária.
 - TikTok: vídeo via URL verificada; caixa de entrada por padrão. Direct Post só após configurar aplicativo revisado, opções atuais de privacidade e consentimento.
 - YouTube: upload resumível com título, descrição, privacidade e declarações de conteúdo.
-- Histórico de operações. As contagens são reais do workspace; não simulam métricas sociais.
+- Histórico de operações e desempenho do Instagram, com coleta autorizada de métricas reais.
+- Organização por grupos, capas por perfil e agendamento de Reels em lote.
+- Laboratório Prisma com 14 ferramentas de imagem, vídeo e áudio no navegador, integrado à biblioteca.
 
 ## Configuração de produção
 
@@ -32,7 +34,7 @@ Segredos da aplicação são configurados nativamente no ambiente de hospedagem:
 
 As credenciais específicas das redes são armazenadas criptografadas em D1. Nunca coloque segredos em arquivos, código cliente, Git ou prompts.
 
-**Mídias públicas:** uploads do workspace permanecem privados. Instagram e TikTok precisam de uma URL HTTPS pública do arquivo original. Informe-a em Biblioteca → Detalhes; no TikTok, configure e verifique seu domínio/prefixo. Nesta versão não há provisionamento automático de um CDN público. O YouTube recebe o arquivo diretamente do armazenamento privado.
+**Distribuição de mídias:** uploads permanecem no armazenamento privado. O Instagram recebe links temporários gerados pela instalação no envio. O TikTok exige uma URL HTTPS em domínio/prefixo verificado; informe-a em Biblioteca → Detalhes. O YouTube recebe o arquivo diretamente do armazenamento privado.
 
 **Aprovações:** a disponibilidade de escopos e contas depende do aplicativo registrado e da aprovação da plataforma. Direct Post do TikTok tem restrições para ferramentas exclusivamente internas. O envio para a caixa de entrada requer ação final do criador no TikTok.
 
@@ -46,20 +48,27 @@ As referências são um acervo manual de inspiração. Não fazem scraping, down
 
 A rotina vinculada ao Site chama a fila a cada 60 minutos. O horário selecionado é o início elegível do envio, não uma garantia de horário exato de publicação. Cada execução processa até três entregas e a rede pode levar mais tempo para processar. Processos ativos não podem ser editados/cancelados; crie outra versão somente após verificar a rede. Consultas de status com falhas temporárias retomam o checkpoint sem recriar mídias ou repetir envios. Escritas com resultado incerto exigem conferência na rede. Falhas temporárias de renovação não expiram a conexão; revogação confirmada exige reconectar. Consulte [OPERATIONS.md](OPERATIONS.md).
 
-Não há renderização/corte de vídeo no servidor, geração de vídeo com IA, métricas de alcance/engajamento, caixa de mensagens ou automação de curtidas/seguidores. O estúdio desta versão edita imagens. Não há integração de faturamento ou equipe compartilhada.
+O Prisma processa imagem, vídeo e áudio no navegador; não há renderização de vídeo no servidor nem geração de vídeo com IA. Métricas do Instagram exigem autorização adicional de Insights. Não há caixa de mensagens, automação de curtidas/seguidores, integração de faturamento ou equipe compartilhada.
 
 ## Desenvolvimento e verificação
 
 Stack: React + Vinext, Cloudflare Workers, D1/SQLite, R2, TypeScript, Zod, Drizzle.
 
+Requisitos: Node.js 22.13 ou superior e pnpm 11.25.0 (versão declarada no `package.json`). A partir de um clone limpo:
+
 ```sh
-node tests/integration.mjs
-node node_modules/typescript/bin/tsc --noEmit
+corepack pnpm install --frozen-lockfile
+npm run check
+npm run build
 ```
 
-O teste usa as rotas e a fila reais com SQLite temporário e HTTP das redes simulado. São 29 verificações de autorização, OAuth oficial e de uso único, isolamento, concorrência, cancelamento, renovação de tokens, recuperação de consultas, criptografia, horário de verão, rotinas, referências e os três adaptadores. Não publica nas redes. Migrações ficam em `drizzle/` e são aplicadas pela hospedagem.
+`npm run check` verifica os tipos e executa as oito suítes de teste independentes de navegador. Também é possível executar `npm run test:core` (painel, publicação, OAuth, mídias e Stories) ou `npm run test:prisma` (integração e interface do estúdio) separadamente. Os testes de integração usam SQLite temporário e respostas simuladas das plataformas; não precisam de contas reais e não publicam nas redes. A suíte principal contém 79 verificações; a integração Prisma contém outras 11.
 
-A compilação de produção usa o helper de build do Sites. Os testes com APIs reais exigem credenciais e contas autorizadas. A revisão visual em navegador ainda não foi executada neste ambiente.
+A compilação prepara o FFmpeg e o detector facial locais antes de gerar o Worker em `dist/server/` e os arquivos de cliente em `dist/client/`. Dentro do Sites, use o helper de build da hospedagem. O repositório já contém a identidade da instalação original em `.openai/hosting.json`; preserve-a ao atualizar essa instalação. Para uma instalação independente e restauração dos dados, siga [docs/MIGRATION.md](docs/MIGRATION.md). Clonar o repositório não copia banco, mídias, contas conectadas nem segredos.
+
+O código inclui organização por grupos, capas e agendamento em lote ([guia](docs/GRUPOS_E_LOTES.md)), coleta de desempenho ([guia](docs/ANALYTICS.md)) e as 14 ferramentas do Prisma ([guia](docs/PRISMA.md)). A configuração atual do executor está em [docs/QUEUE_RUNNER.md](docs/QUEUE_RUNNER.md).
+
+As migrações ficam em `drizzle/` e são aplicadas pela hospedagem. Testes com APIs reais exigem aplicativos e contas autorizadas. Os testes de processamento WASM em `tests/prisma/` são verificações adicionais com fixtures e requisitos próprios; não fazem parte de `npm run check`. A aprovação dos testes automatizados não substitui a validação visual em navegador.
 
 ## Documentação oficial consultada
 
