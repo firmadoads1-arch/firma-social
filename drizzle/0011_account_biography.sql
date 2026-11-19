@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD `biography` text;

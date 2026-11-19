@@ -39,3 +39,12 @@ O backup criptografado existente inclui os projetos, registros de exportação, 
 - `tests/prisma/`: motor WASM real, prévias, exportações Full HD, áudio, layouts, lotes, ZIP, cancelamento, deadlines, recuperação de falhas e modo multithread. Somente o transporte do navegador é substituído nos testes de motor executados em Node.
 
 A prévia gerenciada iniciou em 06/11/2026, mas a rota local não foi acessível pelo navegador de teste. A validação visual e os gestos de edição no navegador não foram confirmados nesse ambiente. Isso é distinto dos testes do motor e de integração acima.
+
+
+## Hash e metadados com conteúdo preservado
+
+Os acessos principais do estúdio abrem Hash e metadados. Cada exportação usa stream copy e recebe um identificador próprio no comentário do contêiner. O hash do arquivo muda; os pacotes de vídeo e áudio, orientação, resolução, duração, cores e taxa de quadros permanecem preservados. Não são aplicados filtros, mudança de velocidade ou recompressão. Campos personalizados continuam disponíveis. Se o contêiner não aceitar os codecs originais, a exportação falha sem converter silenciosamente.
+
+Mesmo Reel em várias contas usa esse mesmo modo para as próximas versões por perfil, com ajustes neutros. Arquivos já salvos ou entregas já preparadas conservam seus recibos e conteúdo. A fila e as autorizações de publicação seguem o fluxo existente.
+
+`node tests/prisma/remux-preservation.mjs` executa o motor WASM real com mídia sintética e confirma hashes distintos, igualdade dos pacotes de vídeo/áudio, orientação, vídeo sem áudio, campos personalizados e o caminho real de preparação por perfil. Também integra `npm run test:prisma`.

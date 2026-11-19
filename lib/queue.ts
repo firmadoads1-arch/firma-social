@@ -4,6 +4,7 @@ import {list,first,run,database,config,bucket,event,runtime,postRow} from './ser
 import {api,accessToken,RemoteError,publicMedia,creatorInfo} from './providers';
 import {AppError,id,seal,unseal} from './security';
 import {localToEpoch,nextLocalDate} from './domain';
+import {generateDailyStories,recurringReady} from './daily-stories';
 import {SHARED_REEL_INTERVAL_MS} from './prisma/shared-reel';
 async function assertLease(d:any){
  if(!await first("SELECT id FROM deliveries WHERE id=? AND lease=? AND status='working' AND lease_until>?",d.id,d.lease,Date.now()))throw new RemoteError('lease_lost',true);
@@ -42,6 +43,7 @@ async function publishStep(d:any):Promise<void>{
   const result=await api(`${base}/${context.container}?fields=status_code`,{headers:auth});
   if(result.status_code==='FINISHED'){if(d.deadline&&Date.now()>=d.deadline){await saveContext(d,context);return;}const published=await post(`/${igId}/media_publish`,{creation_id:context.container});if(!published.id)throw new RemoteError('publish_unknown',true);await saveContext(d,context,'published',String(published.id));return;}
   if(result.status_code==='PUBLISHED'){await saveContext(d,context,'published');return;}
+  if(result.status_code==='EXPIRED'&&d.error===restrictionMessage)return checkpoint(d,{});
   if(['ERROR','EXPIRED'].includes(result.status_code))throw new AppError('O Instagram não conseguiu processar a mídia.');
   if(d.attempts>12)throw new AppError('Processamento prolongado no Instagram. Confira a plataforma.');await saveContext(d,context);return;
  }
@@ -61,26 +63,28 @@ async function publishStep(d:any):Promise<void>{
  if(s==='FAILED')throw new AppError('O TikTok recusou o processamento. Confira formato e permissões.');if(d.attempts>24)throw new RemoteError('tiktok_processing_timeout',true);await saveContext(d,context);
 }
 async function summarize(postId:string,owner:string){const rows=await list('SELECT status FROM deliveries WHERE post_id=? AND owner=?',postId,owner);if(!rows.length)return;const s=rows.map(x=>x.status);let status='publishing';if(s.every(x=>x==='published'))status='published';else if(s.every(x=>['published','inbox'].includes(x)))status=s.includes('inbox')?'inbox':'published';else if(s.every(x=>['published','inbox','failed','uncertain','cancelled'].includes(x)))status=s.some(x=>['published','inbox'].includes(x))?'partial':s.includes('uncertain')?'uncertain':'failed';await run('UPDATE posts SET status=?,updated_at=? WHERE id=? AND owner=?',status,Date.now(),postId,owner);}
-async function generateDrafts(owner?:string){const rules=await list('SELECT * FROM rules WHERE active=1'+(owner?' AND owner=?':''),...(owner?[owner]:[]));let generated=0;
+async function generateDrafts(owner?:string){const rules=await list("SELECT * FROM rules WHERE active=1 AND mode='draft'"+(owner?' AND owner=?':''),...(owner?[owner]:[]));let generated=0;
  for(const r of rules){const ws=await first('SELECT timezone FROM workspaces WHERE owner=?',r.owner);if(!ws)continue;const date=nextLocalDate(Date.now(),ws.timezone);if(r.last_date?.slice(0,10)===date)continue;let time:number|null=null;try{time=localToEpoch(date+'T'+r.time,ws.timezone);}catch{/* Keep the draft unscheduled when the local time does not exist. */}const weekday=new Date(date+'T12:00:00Z').getUTCDay();if(!JSON.parse(r.weekdays).includes(weekday))continue;
   const aids=JSON.parse(r.account_ids);const accts=await list('SELECT id,platform FROM accounts WHERE owner=?',r.owner);const networks=[...new Set(accts.filter(a=>aids.includes(a.id)).map(a=>a.platform))];const mids=JSON.parse(r.media_ids);const available=await list('SELECT id,mime FROM media WHERE owner=?',r.owner);const choices=available.filter(m=>mids.includes(m.id));const selected=choices.length?choices[Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%choices.length]:null;const pid=id();const n=Date.now();
   // Claim date and insert in a single D1 transaction. The stable claim marker is the post ID.
-  const claim=date+':'+pid;await database().batch([database().prepare('UPDATE rules SET last_date=? WHERE id=? AND active=1 AND (last_date IS NULL OR substr(last_date,1,10)<>?)').bind(claim,r.id,date),database().prepare("INSERT INTO posts (id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM rules WHERE id=? AND last_date=?)").bind(pid,r.owner,r.name,r.caption,'{}',JSON.stringify(networks.length?networks:['instagram']),JSON.stringify(aids),JSON.stringify(selected?[selected.id]:[]),selected?.mime.startsWith('image/')?'photo':'video','draft',time,JSON.stringify({location:defaultLocation,locationMode:'caption',coverMode:'account'}),1,n,n,r.group_id??null,r.id,claim)]);const created=await first('SELECT id FROM posts WHERE id=?',pid);if(created){generated++;await event(r.owner,'Rascunho criado pela rotina',r.name+(time===null?' · Escolha outro horário: o horário sugerido não existe neste fuso.':''),pid);}
+  const claim=date+':'+pid;await database().batch([database().prepare('UPDATE rules SET last_date=? WHERE id=? AND active=1 AND (last_date IS NULL OR substr(last_date,1,10)<>?)').bind(claim,r.id,date),database().prepare("INSERT INTO posts (id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM rules WHERE id=? AND last_date=?)").bind(pid,r.owner,r.name,r.caption,'{}',JSON.stringify(networks.length?networks:['instagram']),JSON.stringify(aids),JSON.stringify(selected?[selected.id]:[]),selected?.mime.startsWith('image/')?'photo':'video','draft',time,JSON.stringify({locationMode:'none',coverMode:'account'}),1,n,n,r.group_id??null,r.id,claim)]);const created=await first('SELECT id FROM posts WHERE id=?',pid);if(created){generated++;await event(r.owner,'Rascunho criado pela rotina',r.name+(time===null?' · Escolha outro horário: o horário sugerido não existe neste fuso.':''),pid);}
  }return generated;
 }
 export const earlierBatchPending=(b:string)=>`EXISTS (
  SELECT 1 FROM posts prev JOIN deliveries x ON x.owner=prev.owner AND x.post_id=prev.id
  WHERE prev.owner=${b}.owner AND prev.batch_id=${b}.batch_id AND prev.batch_position<${b}.batch_position
- AND x.status NOT IN ('published','cancelled','failed'))`;
+ AND x.status NOT IN ('published','cancelled','failed')
+ AND NOT (COALESCE(json_extract(${b}.options,'$.prismaSharedReel'),0)=1 AND (x.status='uncertain' OR (x.status='processing' AND x.error IS NOT NULL))))`;
 export const batchCooldownUntil=(d:string,b:string)=>`COALESCE((
- SELECT MAX(x.updated_at+CASE WHEN prev.batch_id=${b}.batch_id AND json_extract(${b}.options,'$.prismaSharedReel')=1 THEN ${SHARED_REEL_INTERVAL_MS} ELSE 60000 END) FROM deliveries x JOIN posts prev ON prev.id=x.post_id AND prev.owner=x.owner
- WHERE x.owner=${d}.owner AND x.status='published' AND prev.batch_id IS NOT NULL
+ SELECT MAX(x.updated_at+CASE WHEN prev.batch_id=${b}.batch_id AND COALESCE(json_extract(${b}.options,'$.prismaSharedReel'),0)=1 THEN CASE WHEN x.account_id=${d}.account_id THEN MAX(${SHARED_REEL_INTERVAL_MS},COALESCE(json_extract(${b}.options,'$.videoIntervalMs'),${SHARED_REEL_INTERVAL_MS})) ELSE ${SHARED_REEL_INTERVAL_MS} END ELSE 60000 END) FROM deliveries x JOIN posts prev ON prev.id=x.post_id AND prev.owner=x.owner
+ WHERE x.owner=${d}.owner AND (x.status='published' OR (COALESCE(json_extract(${b}.options,'$.prismaSharedReel'),0)=1 AND x.error IS NOT NULL)) AND prev.batch_id IS NOT NULL
  AND (x.account_id=${d}.account_id OR prev.batch_id=${b}.batch_id)),0)`;
 // Recheck at claim time, including the previous delivery's confirmed publish time.
 export const batchReady=(d:string)=>`NOT EXISTS (
  SELECT 1 FROM posts b WHERE b.id=${d}.post_id AND b.owner=${d}.owner AND b.batch_id IS NOT NULL
  AND (${earlierBatchPending('b')} OR ${batchCooldownUntil(d,'b')}>?))`;
 
+const restrictionMessage='Publicação temporariamente bloqueada pelo Instagram. Nova verificação automática em uma hora.';
 const interruptedDelivery = 'A execução foi interrompida. Confira a rede antes de criar outro envio.';
 
 export async function resumeInstagramPost(owner:string,postId:string){
@@ -99,7 +103,7 @@ export async function resumeInstagramPost(owner:string,postId:string){
 
 export async function processQueue(owner:string,source:'manual'|'service'='manual',postId?:string,platform?:'instagram'){
  if(!owner)throw new AppError('Workspace da fila não configurado.',403);
- const startedAt=Date.now();const drafted=postId?0:await generateDrafts(owner);
+ const startedAt=Date.now();const drafted=postId?0:await generateDrafts(owner);if(!postId)await generateDailyStories(owner);
  const scope=' AND owner=?'+(postId?' AND post_id=?':'')+(platform?' AND platform=?':'');
  const params=[owner,...(postId?[postId]:[]),...(platform?[platform]:[])];
  const stale=await list("SELECT * FROM deliveries WHERE status='working' AND lease_until<=?"+scope,startedAt,...params);
@@ -107,14 +111,15 @@ export async function processQueue(owner:string,source:'manual'|'service'='manua
   const expired=await run("UPDATE deliveries SET status='uncertain',error=?,lease=NULL,lease_until=NULL WHERE id=? AND status='working' AND lease IS ? AND lease_until<=?",interruptedDelivery,d.id,d.lease,startedAt);
   if(expired.meta.changes)await summarize(d.post_id,d.owner);
  }
- const due=await list("SELECT d.* FROM deliveries d JOIN posts p ON p.id=d.post_id AND p.owner=d.owner WHERE d.status IN ('pending','processing') AND d.next_run<=? AND p.status IN ('scheduled','publishing') AND d.owner=?"+(postId?' AND d.post_id=?':'')+(platform?' AND d.platform=?':'')+' AND '+batchReady('d')+' ORDER BY d.next_run,d.created_at LIMIT 3',Date.now(),...params,Date.now());let processed=0;
- for(const item of due){if(processed&&Date.now()-startedAt>20000)break;const lease=id();const claim=await database().batch([database().prepare("UPDATE deliveries SET status='working',lease=?,lease_until=?,attempts=attempts+1 WHERE id=? AND status IN ('pending','processing') AND EXISTS (SELECT 1 FROM posts WHERE id=deliveries.post_id AND status IN ('scheduled','publishing')) AND NOT EXISTS (SELECT 1 FROM deliveries other WHERE other.account_id=deliveries.account_id AND other.status='working' AND other.lease_until>unixepoch()*1000) AND next_run<=? AND "+batchReady('deliveries')).bind(lease,Date.now()+600000,item.id,Date.now(),Date.now()),database().prepare("UPDATE posts SET status='publishing',updated_at=? WHERE id=? AND EXISTS (SELECT 1 FROM deliveries WHERE id=? AND lease=?)").bind(Date.now(),item.post_id,item.id,lease)]);if(!claim[0].meta.changes)continue;const d={...item,lease,attempts:item.attempts+1,deadline:startedAt+20000};
+ const due=await list("SELECT d.* FROM deliveries d JOIN posts p ON p.id=d.post_id AND p.owner=d.owner WHERE d.status IN ('pending','processing') AND d.next_run<=? AND p.status IN ('scheduled','publishing') AND d.owner=?"+(postId?' AND d.post_id=?':'')+(platform?' AND d.platform=?':'')+' AND '+batchReady('d')+' AND '+recurringReady('d','p')+" ORDER BY CASE WHEN d.status='processing' AND d.error IS NULL THEN 0 ELSE 1 END,d.next_run,d.created_at LIMIT 3",Date.now(),...params,Date.now());let processed=0;
+ for(const item of due){if(processed&&Date.now()-startedAt>20000)break;const lease=id();const claim=await database().batch([database().prepare("UPDATE deliveries SET status='working',lease=?,lease_until=?,attempts=attempts+1 WHERE id=? AND status IN ('pending','processing') AND EXISTS (SELECT 1 FROM posts WHERE id=deliveries.post_id AND status IN ('scheduled','publishing')) AND NOT EXISTS (SELECT 1 FROM deliveries other WHERE other.account_id=deliveries.account_id AND other.status='working' AND other.lease_until>unixepoch()*1000) AND next_run<=? AND EXISTS(SELECT 1 FROM posts p WHERE p.id=deliveries.post_id AND p.owner=deliveries.owner AND "+recurringReady('deliveries','p')+") AND "+batchReady('deliveries')).bind(lease,Date.now()+600000,item.id,Date.now(),Date.now()),database().prepare("UPDATE posts SET status='publishing',updated_at=? WHERE id=? AND EXISTS (SELECT 1 FROM deliveries WHERE id=? AND lease=?)").bind(Date.now(),item.post_id,item.id,lease)]);if(!claim[0].meta.changes)continue;const d={...item,lease,attempts:item.attempts+1,deadline:startedAt+20000};
   try{await publishStep(d);}catch(e){
-   const retry=e instanceof RemoteError&&e.retryable&&d.attempts<24;
+   const restricted=d.platform==='instagram'&&e instanceof RemoteError&&e.failure==='publishing_restricted'&&!e.uncertain;
+   const retry=restricted||e instanceof RemoteError&&e.retryable&&d.attempts<24;
    const uncertain=e instanceof RemoteError?(e.uncertain||e.retryable):!(e instanceof AppError);
-   const msg=e instanceof AppError?e.message:'Resultado não confirmado. Confira a plataforma antes de reenviar.';
+   const msg=restricted?restrictionMessage:e instanceof AppError?e.message:'Resultado não confirmado. Confira a plataforma antes de reenviar.';
    // Read-only failures resume from the persisted checkpoint. Ambiguous writes are never replayed.
-   await run('UPDATE deliveries SET status=?,error=?,next_run=?,lease=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease=?',retry?'processing':uncertain?'uncertain':'failed',msg,Date.now()+Math.min(60,2**Math.min(d.attempts,6))*60000,Date.now(),d.id,lease);
+   await run('UPDATE deliveries SET status=?,error=?,next_run=?,lease=NULL,lease_until=NULL,updated_at=? WHERE id=? AND lease=?',retry?'processing':uncertain?'uncertain':'failed',msg,Date.now()+(restricted?60:Math.min(60,2**Math.min(d.attempts,6)))*60000,Date.now(),d.id,lease);
    if(!retry)await event(d.owner,'Publicação requer atenção',msg,d.post_id);
   }
   await summarize(d.post_id,d.owner);processed++;

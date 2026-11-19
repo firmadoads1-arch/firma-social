@@ -33,7 +33,8 @@ export async function restoreData(g:Grant,backup:any){
  const columns:Record<string,string[]>={};const schema:Record<string,any[]>={};
  for(const t of tables){schema[t]=await list(`PRAGMA table_info(${t})`);columns[t]=schema[t].map(c=>c.name);}
  for(const t of tables)for(const row of data[t]){
-  if(row&&typeof row==='object')for(const key of ['group_id','cover_media_id','batch_id','batch_position'])if(columns[t].includes(key)&&!(key in row))row[key]=null;
+  if(row&&typeof row==='object')for(const key of ['group_id','cover_media_id','batch_id','batch_position','biography','profile_picture_url','profile_checked_at','profile_sync_status','profile_attempt_at','availability_status','availability_result','availability_username','availability_reason','availability_checked_at','availability_attempt_at','recurrence_key','starts_on','approved_at'])if(columns[t].includes(key)&&!(key in row))row[key]=null;
+  if(t==='rules'&&row&&typeof row==='object'&&!('mode' in row))row.mode='draft';
   if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).length!==columns[t].length||Object.keys(row).some(k=>!columns[t].includes(k)))throw new AppError('Schema incompatível: '+t);
   if(t!=='workspaces'&&(typeof row.id!=='string'||!/^[0-9a-f-]{36}$/.test(row.id)))throw new AppError('Identificador inválido.');
   for(const col of schema[t]){const value=row[col.name];const protectedObject=(t==='accounts'&&col.name==='tokens'&&value!=='')||((t==='provider_configs'||t==='geo_grants')&&col.name==='encrypted')||(t==='deliveries'&&col.name==='context');if(protectedObject){if(!value||typeof value!=='object'||Array.isArray(value))throw new AppError('Credenciais ou histórico inválidos.');}else if(value===null){if(col.notnull)throw new AppError('Campo obrigatório ausente.');}else if(col.type.toUpperCase()==='TEXT'?typeof value!=='string':typeof value!=='number'||!Number.isFinite(value))throw new AppError('Tipo inválido no backup.');}

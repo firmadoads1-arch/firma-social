@@ -28,3 +28,8 @@ export function connectionError(reason: unknown) {
 export function accountLabel(account: Pick<Account, 'platform' | 'username' | 'displayName'>) {
   return account.platform === 'instagram' ? '@' + account.username.replace(/^@/, '') : account.displayName || account.username;
 }
+
+/** Matches the connection label shown in Accounts; independent of public-page checks. */
+export function connectedProfiles<T extends Pick<Account,'state'|'profileSyncStatus'>>(accounts:T[]):T[]{
+ return accounts.filter(account=>account.state==='connected'&&account.profileSyncStatus!=='authorization_required');
+}

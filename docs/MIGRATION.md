@@ -42,3 +42,7 @@ Use `npx wrangler d1 migrations apply DB --remote --config dist/server/wrangler.
 As mídias enviadas ao Instagram (incluindo capas de Reels) usam links temporários da própria instalação, gerados apenas no envio. O backup preserva a associação da capa em cada conteúdo; após restaurar e revisar o agendamento, os links passam a usar APP_ORIGIN do destino. A URL externa opcional da biblioteca é usada somente pelo TikTok.
 
 Após a migração, configure um executor autenticado para o novo workspace conforme `docs/QUEUE_RUNNER.md`. Novos agendamentos ficam bloqueados enquanto essa configuração não estiver válida; rascunhos e contas permanecem disponíveis.
+
+## Importação incremental de contas do Instagram
+
+Com uma autorização temporária de importação válida, `POST /api/migration?accounts=1` aceita `{format:"firma-portable-v1",data:{accounts:[...]}}` do exportador existente. Adiciona somente identidades ausentes (`owner`, plataforma, ID no Instagram), com IDs locais novos e credenciais recriptografadas. Contas existentes são preservadas integralmente. Não importa mídias, capas, grupos, configurações do aplicativo, conteúdos, métricas ou agendamentos. Perfis novos aparecem em Geral. Repetir a mesma importação não duplica perfis. A restauração completa continua exigindo workspace vazio.

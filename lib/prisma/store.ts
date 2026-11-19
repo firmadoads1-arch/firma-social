@@ -36,7 +36,7 @@ async function upload(r:Request,owner:string,p:any,url:URL){
    first("SELECT id FROM accounts WHERE id=? AND owner=? AND platform='instagram'",accountId,owner),
    first("SELECT id FROM media WHERE id=? AND owner=? AND mime IN ('video/mp4','video/quicktime')",sourceId,owner),
   ]);
-  if(!account||!source||meta.outputId!==mid||mid!==await sharedReelOutputId(p.id,accountId))throw new AppError('A exportação não corresponde a este perfil do lote.');
+  if(!account||!source||meta.outputId!==mid||(mid!==await sharedReelOutputId(p.id,accountId)&&mid!==await sharedReelOutputId(p.id,accountId,sourceId)))throw new AppError('A exportação não corresponde a este perfil do lote.');
  }
  if(meta.outputId&&(meta.file?.name!==name||meta.file?.mime!==mime||meta.file?.bytes!==size))throw new AppError('Os dados da exportação não correspondem ao arquivo.');
  const previous=async()=>{const row=await first(mediaSelect+' WHERE m.id=? AND m.owner=?',mid,owner);if(!row)return null;if(row.project_id!==p.id||row.name!==name||row.mime!==mime||row.size!==size||row.tool!==tool||row.kind!==kind||row.settings!==settings||JSON.stringify(JSON.parse(row.metadata))!==JSON.stringify(meta))throw new AppError('Identificador já usado com outros dados.',409);return item(row);};

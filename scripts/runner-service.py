@@ -37,7 +37,7 @@ try:
  elif data.get('mode','run')=='run':
   for step in range(5):
    queue=verified_step();next_at=queue.get('nextCheckAt')
-   if not (queue.get('processing') or queue.get('batchSoon')) or not next_at:break
+   if not (queue.get('pending') or queue.get('processing') or queue.get('working') or queue.get('batchSoon')) or not next_at:break
    delay=max(1,(next_at-time.time()*1000)/1000+1)
    if step==4 or delay>61:break
    time.sleep(delay)

@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.resolve('wrangler/package.json')),{build}=require('esbuild');
+const result=await build({entryPoints:['app/chatgpt-auth.ts'],bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'identity-fixtures',setup(b){
+ b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixture'}));
+ b.onResolve({filter:/^next\/headers$/},()=>({path:'headers',namespace:'fixture'}));
+ b.onResolve({filter:/^next\/navigation$/},()=>({path:'navigation',namespace:'fixture'}));
+ b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:path==='env'?'export const env=globalThis.identityEnv;':path==='headers'?'export const headers=async()=>globalThis.identityHeaders;':'export const redirect=()=>{throw Error("redirect")};'}));
+}}]});
+globalThis.identityEnv={AUTH_MODE:'sites',WORKSPACE_USER_ALIASES:JSON.stringify({'secondary-user':'migrated-user'})};
+globalThis.identityHeaders=new Headers();
+const auth=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+assert.equal(await auth.getChatGPTUser(),null);
+identityHeaders.set('oai-authenticated-user-id','secondary-user');assert.equal(await auth.getChatGPTUser(),null);
+identityHeaders.set('oai-authenticated-user-email','owner@example.invalid');
+assert.equal((await auth.getChatGPTUser()).userId,'migrated-user');
+identityHeaders.set('oai-authenticated-user-id','other-user');assert.equal((await auth.getChatGPTUser()).userId,'other-user');
+assert.equal(auth.workspaceUserId('migrated-user',identityEnv.WORKSPACE_USER_ALIASES),'migrated-user');
+assert.equal(auth.workspaceUserId('secondary-user'),'secondary-user');
+assert.equal(auth.workspaceUserId('second-login',JSON.stringify({'email:owner@example.invalid':'migrated-user'}),'OWNER@example.invalid'),'migrated-user');
+assert.equal(auth.workspaceUserId('other',JSON.stringify({'email:owner@example.invalid':'migrated-user'}),'other@example.invalid'),'other');
+assert.equal(auth.workspaceUserId('toString','{}'),'toString');
+for(const raw of ['null','[]','{"secondary-user":null}','{"secondary-user":""}','{'])assert.throws(()=>auth.workspaceUserId('secondary-user',raw));
+console.log('Workspace identity: real sign-in required, explicit aliases only, unrelated users isolated and invalid configuration rejected.');

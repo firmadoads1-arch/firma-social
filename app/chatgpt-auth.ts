@@ -37,7 +37,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
       : null;
 
   return {
-    userId,
+    userId: workspaceUserId(userId, settings.WORKSPACE_USER_ALIASES, email),
     displayName: fullName ?? email,
     email,
     fullName,
@@ -93,4 +93,19 @@ function safeDecodeURIComponent(value: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Trusted, server-only aliases for an explicitly linked migrated workspace.
+// Authentication and Sites access policy still apply before this mapping.
+export function workspaceUserId(subject: string, raw?: string, email?: string): string {
+  if (!raw) return subject;
+  const aliases: unknown = JSON.parse(raw);
+  if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases) ||
+      Object.values(aliases).some(value => typeof value !== 'string' || !value.trim())) {
+    throw new Error('Invalid workspace identity aliases.');
+  }
+  const key = email ? 'email:' + email.trim().toLowerCase() : '';
+  const map = aliases as Record<string,string>;
+  return Object.hasOwn(map, subject) ? map[subject]
+    : key && Object.hasOwn(map, key) ? map[key] : subject;
 }

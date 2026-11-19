@@ -1,6 +1,6 @@
 import {AppError} from './security';
 
-export type RemoteFailure = 'app_credentials' | 'app_secret' | 'redirect_uri' | 'authorization_code' | 'permissions' | 'account_type' | 'temporary' | 'provider';
+export type RemoteFailure = 'app_credentials' | 'app_secret' | 'redirect_uri' | 'authorization_code' | 'permissions' | 'account_type' | 'temporary' | 'publishing_restricted' | 'provider';
 export type RemoteDiagnostic = {httpStatus: number; providerCode: string; providerSubcode?: string};
 export class RemoteError extends AppError {
   constructor(public code: string, public uncertain = false, public retryable = false, public failure: RemoteFailure = 'provider', public diagnostic?: RemoteDiagnostic) {
@@ -23,7 +23,8 @@ export function remoteError(status: number, body: any, readOnly: boolean) {
   const message = [detail?.message, detail?.error_message, body?.error_description].filter(v => typeof v === 'string').join(' ').slice(0, 8192).toLowerCase();
   const transient = status === 429 || status === 408 || status >= 500 || detail?.is_transient === true || ['temporarily_unavailable','server_error'].includes(code);
   let failure: RemoteFailure = 'provider';
-  if (transient) failure = 'temporary';
+  if (status>=400&&status<500&&code==='368') failure='publishing_restricted';
+  else if (transient) failure = 'temporary';
   else if (/invalid (?:app_|client_)?secret|invalid client secret|client secret.*(?:invalid|incorrect)|app_secret.*(?:invalid|incorrect)/.test(message) || code === 'invalid_client_secret') failure = 'app_secret';
   else if (/redirect[_ ]uri|redirect url/.test(message)) failure = 'redirect_uri';
   else if (/matching code|verification code|authorization code.*(?:invalid|expired|used)/.test(message) || code === 'invalid_grant') failure = 'authorization_code';

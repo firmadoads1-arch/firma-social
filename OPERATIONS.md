@@ -1,6 +1,6 @@
 # Operação da fila da Firma Social
 
-Site: `appgprj_6ad3a88a6fd08191bcba9ab302a6bce7`.
+Site: `appgprj_6af35b00b45881919b366986778b5765`.
 
 O agendador disponível permite no máximo uma execução por hora. A tarefa vinculada verifica a fila a cada 60 minutos e atualiza dados; não reconstrói nem republica o site. Publica somente conteúdos que o proprietário revisou e agendou no editor. Rotinas geram rascunhos, nunca publicações por conta própria.
 

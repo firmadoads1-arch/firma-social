@@ -12,7 +12,7 @@ export const assetRows=(owner:string)=>list('SELECT id,name,group_id AS groupId,
 export const accountRows=(owner:string)=>list("SELECT a.id,a.group_id AS groupId,a.cover_media_id AS coverMediaId,a.username,a.platform,a.state,EXISTS(SELECT 1 FROM geo_grants g WHERE g.id=a.id AND g.owner=a.owner) AS nativeLocation FROM accounts a WHERE a.owner=?",owner);
 export function prepareOptions(p:any,accounts:any[],assets:any[],old?:any){
  const o=p.options,prior=old?JSON.parse(old.options):null;
- if(!old&&!o.locationMode){o.location=defaultLocation;const native=p.format!=='story'&&p.platforms.length===1&&p.platforms[0]==='instagram'&&p.accountIds.length>0&&p.accountIds.every((k:string)=>accounts.some(a=>a.id===k&&a.nativeLocation));o.locationMode=p.format==='story'?'none':native?'native':'caption';if(native)o.placeId=saoPauloPage;}
+ if(!old&&!o.locationMode)o.locationMode='none';
  if(o.locationMode==='sticker'&&(p.format!=='story'||p.platforms.some((n:string)=>n!=='instagram')))throw new AppError('O adesivo de localização é exclusivo de Stories do Instagram.');
  if(o.locationMode==='native'&&(p.format==='story'||p.platforms.length!==1||p.platforms[0]!=='instagram'||!o.placeId||!p.accountIds.length||p.accountIds.some((k:string)=>!accounts.find(a=>a.id===k&&a.nativeLocation))))throw new AppError('A marcação nativa requer uma Página vinculada a cada perfil do Instagram e o ID do local. Para Stories, use o adesivo no aplicativo.');
  const mode=o.coverMode??(o.instagramCoverMediaId?'custom':old&&!prior?.coverMode?'frame':'account');
@@ -51,27 +51,28 @@ export async function editingAction(action:string,d:any,owner:string,group:strin
  }
  if(action==='post.batch'||action==='post.sharedReelBatch'||action==='post.prepareSharedReelBatch'){
   const shared=action!=='post.batch'?z.object({
-   requestId:uid,accountIds:z.array(uid).min(2).max(100).refine(ids=>new Set(ids).size===ids.length,'Perfis repetidos.'),
+   requestId:uid,accountIds:z.array(uid).min(1).max(100).refine(ids=>new Set(ids).size===ids.length,'Perfis repetidos.'),
    title:z.string().trim().min(1).max(100).refine(title=>!/[\/\\]/.test(title)&&![...title].some(c=>c.charCodeAt(0)<32),'Use um título sem barras.'),
-   mediaId:uid,coverId:uid,startsAt:z.number().int().positive(),caption:z.string().max(2200),approved:z.literal(true)
-  }).parse(d):null;
-  const v=shared?{requestId:shared.requestId,accountId:shared.accountIds[0],mediaIds:[shared.mediaId],startsAt:shared.startsAt,caption:shared.caption,location:'',locationMode:'none' as const,placeId:null}:z.object({requestId:uid,accountId:uid,mediaIds:z.array(uid).min(1).max(100).refine(a=>new Set(a).size===a.length),startsAt:z.number().int().positive(),caption:z.string().max(2200).default(''),approved:z.literal(true),location:z.string().trim().max(100).default(defaultLocation),locationMode:z.enum(['none','caption','native']).default('caption'),placeId:z.string().regex(/^\d{3,25}$/).nullable().optional()}).parse(d);
+   mediaId:uid.optional(),mediaIds:z.array(uid).min(1).max(100).refine(ids=>new Set(ids).size===ids.length,'Vídeos repetidos.').optional(),intervalMinutes:z.number().int().min(3).max(43200).optional(),coverId:uid.optional(),coverIds:z.record(uid,uid).refine(c=>Object.keys(c).length<=100).optional(),startsAt:z.number().int().positive(),caption:z.string().max(2200),approved:z.literal(true),immediate:z.boolean().default(false)
+  }).refine(v=>!!v.mediaId||!!v.mediaIds?.length,'Selecione os vídeos.').refine(v=>!v.mediaId||!v.mediaIds,'Use apenas uma seleção de vídeos.').refine(v=>(v.mediaIds??[v.mediaId!]).every(mid=>!!(v.coverIds?.[mid]??v.coverId)),'Escolha uma capa para cada vídeo.').refine(v=>!v.coverIds||Object.keys(v.coverIds).every(mid=>(v.mediaIds??[v.mediaId!]).includes(mid)),'Há uma capa vinculada a um vídeo fora da seleção.').parse(d):null;
+  const v=shared?{requestId:shared.requestId,accountId:shared.accountIds[0],mediaIds:shared.mediaIds??[shared.mediaId!],startsAt:shared.startsAt,caption:shared.caption,location:'',locationMode:'none' as const,placeId:null}:z.object({requestId:uid,accountId:uid,mediaIds:z.array(uid).min(1).max(100).refine(a=>new Set(a).size===a.length),startsAt:z.number().int().positive(),caption:z.string().max(2200).default(''),approved:z.literal(true),location:z.string().trim().max(100).default(''),locationMode:z.enum(['none','caption','native']).default('none'),placeId:z.string().regex(/^\d{3,25}$/).nullable().optional()}).parse(d);
   const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([group,shared??v]))))).map(n=>n.toString(16).padStart(2,'0')).join('');
   const receipt=async()=>{const b=await first('SELECT fingerprint,count,starts_at FROM publish_batches WHERE id=? AND owner=?',v.requestId,owner);if(!b)return null;if(b.fingerprint!==fingerprint)throw new AppError('O lote já foi criado com outros dados.',409);return {id:v.requestId,count:b.count,startsAt:b.starts_at};};
   const previous=await receipt();if(previous)return previous;
   const accountIds=shared?.accountIds??[v.accountId];
-  await Promise.all([requireItems(owner,group,'media',shared?[shared.mediaId,shared.coverId]:v.mediaIds),requireItems(owner,group,'accounts',accountIds)]);
+  await Promise.all([requireItems(owner,group,'media',shared?[...new Set([...v.mediaIds,...v.mediaIds.map(mid=>(shared.coverIds?.[mid]??shared.coverId)!)])]:v.mediaIds),requireItems(owner,group,'accounts',accountIds)]);
   const [accounts,assets,provider]=await Promise.all([accountRows(owner),assetRows(owner),config(owner,'instagram')]);
   const selected=accountIds.map(aid=>accounts.find(x=>x.id===aid&&x.platform==='instagram'&&x.state==='connected'));
   if(selected.some(a=>!a)||!provider||!schedulerEnabled(owner,runtime()))throw new AppError('Conecte todos os perfis do Instagram e ative a fila antes de agendar.',409);
-  const cover=shared?assets.find(m=>m.id===shared.coverId&&usableCover(m)):accountCover(selected[0],assets);
-  if(!cover)throw new AppError(shared?'Selecione uma capa JPG de até 8 MB da biblioteca.':'Escolha uma capa padrão em Perfis ou adicione à biblioteca um JPG com o nome do @perfil.');
+  const batchCover=shared?null:accountCover(selected[0],assets);
+  const sourceCovers=new Map(v.mediaIds.map(mid=>[mid,assets.find(m=>m.id===(shared?.coverIds?.[mid]??shared?.coverId)&&usableCover(m))]));
+  if(shared?[...sourceCovers.values()].some(cover=>!cover):!batchCover)throw new AppError(shared?'Selecione uma capa JPG de até 8 MB para cada vídeo.':'Escolha uma capa padrão em Perfis ou adicione à biblioteca um JPG com o nome do @perfil.');
   const now=Date.now(),index=new Map(assets.map(m=>[m.id,m]));
   let startsAt=v.startsAt;
   let destinations=v.mediaIds.map(mid=>({a:selected[0],mid}));
   if(shared){
-   const source=index.get(shared.mediaId);
-   if(!source||!['video/mp4','video/quicktime'].includes(source.mime)||source.size>80*1024*1024||source.duration>180)throw new AppError('O Prisma aceita vídeo MP4 ou MOV de até 80 MB e 3 minutos.');
+   const sources=v.mediaIds.map(mid=>index.get(mid));
+   if(sources.some(source=>!source||!['video/mp4','video/quicktime'].includes(source.mime)||source.size>80*1024*1024||source.duration>180))throw new AppError('O Prisma aceita vídeo MP4 ou MOV de até 80 MB e 3 minutos.');
    const folder=sharedReelFolder(shared.title),projectName=shared.title+' · '+fingerprint.slice(0,16);
    if(action==='post.prepareSharedReelBatch'){
     await run('INSERT OR IGNORE INTO prisma_projects(id,owner,group_id,name,folder,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',v.requestId,owner,group,projectName,folder,now,now);
@@ -82,23 +83,24 @@ export async function editingAction(action:string,d:any,owner:string,group:strin
    const exports=await list(`SELECT p.id,p.metadata FROM prisma_files p JOIN media m ON m.id=p.id AND m.owner=p.owner
      WHERE p.project_id=? AND p.owner=? AND p.tool=? AND p.kind='export' AND m.mime='video/mp4' AND m.folder=?`,v.requestId,owner,SHARED_REEL_TOOL,folder);
    const rendered=new Map(exports.map(row=>[row.id,JSON.parse(row.metadata)]));
-   destinations=await Promise.all(selected.map(async a=>{
-    const mid=await sharedReelOutputId(v.requestId,a.id),metadata=rendered.get(mid);
-    if(!metadata||metadata.accountId!==a.id||metadata.sourceId!==source.id||metadata.outputId!==mid||mid===source.id)throw new AppError('Ainda falta uma versão do Prisma. Conclua as exportações antes de agendar.',409);
+   destinations=await Promise.all(sources.flatMap(source=>selected.map(async a=>{
+    const mid=await sharedReelOutputId(v.requestId,a.id,shared.mediaIds?source!.id:undefined),metadata=rendered.get(mid);
+    if(!metadata||metadata.accountId!==a.id||metadata.sourceId!==source!.id||metadata.outputId!==mid||mid===source!.id)throw new AppError('Ainda falta uma versão do Prisma. Conclua as exportações antes de agendar.',409);
     return {a,mid};
-   }));
-   startsAt=Math.max(startsAt,Math.ceil((now+60000)/60000)*60000);
+   })));
+   startsAt=shared.immediate?now:Math.max(startsAt,Math.ceil((now+60000)/60000)*60000);
   }
 
   const entries=destinations.map(({a,mid},pos)=>{
+   const cover=(shared?sourceCovers.get(v.mediaIds[Math.floor(pos/selected.length)]):batchCover)!;
    const m=index.get(mid);
    if(!m||!['video/mp4','video/quicktime'].includes(m.mime))throw new AppError('Cada item do lote deve ser um vídeo MP4 ou MOV.');
-   const time=startsAt+(shared?SHARED_REEL_INTERVAL_MS:60000)*pos,title=shared?.title??(m.name.replace(/\.[^.]+$/,'').slice(0,100)||'Reel');
-   const options=shared?{coverMode:'custom',instagramCoverMediaId:cover.id,locationMode:'none'}:{coverMode:'account',location:v.location||defaultLocation,locationMode:v.locationMode,placeId:v.placeId??(v.location===defaultLocation?saoPauloPage:null)};
+   const time=startsAt+(shared?Math.floor(pos/selected.length)*Math.max((shared.intervalMinutes??3)*60000,selected.length*SHARED_REEL_INTERVAL_MS)+(pos%selected.length)*SHARED_REEL_INTERVAL_MS:60000*pos),title=shared?.title??(m.name.replace(/\.[^.]+$/,'').slice(0,100)||'Reel');
+   const options=shared?{coverMode:'custom',instagramCoverMediaId:cover.id,locationMode:'none'}:{coverMode:'account',location:v.location,locationMode:v.locationMode,placeId:v.placeId??(v.location===defaultLocation?saoPauloPage:null)};
    const p=postInput.parse({title,format:'video',platforms:['instagram'],accountIds:[a.id],mediaIds:[mid],caption:v.caption,status:'scheduled',scheduledAt:time,options});
    prepareOptions(p,[a],[cover]);
-   const issues=validatePublishing(p,[m],[a],now);if(issues.length)throw new AppError(issues.join(' '));
-   return {id:id(),did:id(),title,mid,time,pos,aid:a.id,groupId:group??a.groupId??null,options:shared?{...p.options,sharedReelBatch:true,prismaSharedReel:true}:p.options};
+   const issues=validatePublishing(p,[m],[a],now,!!shared?.immediate);if(issues.length)throw new AppError(issues.join(' '));
+   return {id:id(),did:id(),title,mid,time,pos,aid:a.id,groupId:group??a.groupId??null,options:shared?{...p.options,sharedReelBatch:true,prismaSharedReel:true,videoIntervalMs:(shared.intervalMinutes??3)*60000}:p.options};
   });
   const q=database().prepare.bind(database()),json=JSON.stringify(entries);
   try{await database().batch([

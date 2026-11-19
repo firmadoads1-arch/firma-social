@@ -39,8 +39,8 @@ const file=new File([fs.readFileSync(process.argv[2])],'regression.mp4',{type:'v
 const progress=()=>{};
 const info=await inspect(file,progress);
 assert.ok(info.video&&info.audio&&info.duration>3);
-const [variantA]=await processMedia(file,'advanced',sharedReelSettings(0),progress);
-const [variantB]=await processMedia(file,'advanced',sharedReelSettings(1),progress);
+const [variantA]=await processMedia(file,'remux',sharedReelSettings(0),progress);
+const [variantB]=await processMedia(file,'remux',sharedReelSettings(1),progress);
 for(const variant of [variantA,variantB]){
  assert.equal(variant.blob.type,'video/mp4');
  assert.equal(variant.info.width,info.width);assert.equal(variant.info.height,info.height);

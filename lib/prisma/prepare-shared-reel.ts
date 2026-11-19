@@ -2,22 +2,22 @@ import type {Media} from '../domain';
 import {SHARED_REEL_TOOL,sharedReelOutputId,sharedReelSettings} from './shared-reel';
 
 export async function renderSharedReelVersions({
- projectId,group,source,profiles,progress,
+ projectId,group,source,profiles,progress,multiSource=false,
 }:{
- projectId:string;group?:string|null;source:Media;profiles:{id:string;username:string}[];
- progress:(message:string)=>void;
+ multiSource?:boolean;projectId:string;group?:string|null;source:Media;profiles:{id:string;username:string}[];
+ progress:(message:string,percent?:number)=>void;
 }){
  let original:File|undefined;
  for(const [index,profile] of profiles.entries()){
-  const outputId=await sharedReelOutputId(projectId,profile.id);
+  const outputId=await sharedReelOutputId(projectId,profile.id,multiSource?source.id:undefined);
   const query=new URLSearchParams({project:projectId,uploadId:outputId});
   if(group)query.set('group',group);
   const lookup='/api/prisma/files?'+query;
   const label=`Versão ${index+1} de ${profiles.length} · @${profile.username}`;
-  progress(label+' · verificando arquivo salvo');
+  progress(label+' · verificando arquivo salvo',index/profiles.length*60);
   const saved=await fetch(lookup,{cache:'no-store',signal:AbortSignal.timeout(30000)});
   if(!saved.ok)throw Error('Não foi possível consultar os arquivos do projeto Prisma.');
-  if(await saved.json())continue;
+  if(await saved.json()){progress(label+' · arquivo salvo',(index+1)/profiles.length*60);continue;}
   if(!original){
    progress('Baixando o vídeo original da biblioteca…');
    const input=await fetch('/api/media/'+source.id,{signal:AbortSignal.timeout(120000)});
@@ -26,10 +26,11 @@ export async function renderSharedReelVersions({
   }
   const {processMedia}=await import('./media');
   const settings=sharedReelSettings(index);
-  const [output]=await processMedia(original,'advanced',settings,(percent,message)=>progress(`${label} · ${Math.round(percent)}% · ${message}`));
+  const [output]=await processMedia(original,'remux',settings,(percent,message)=>progress(`${label} · ${Math.round(percent)}% · ${message}`,(index+Math.min(99,percent)/100)/profiles.length*60));
   if(!output?.info.video||output.blob.type!=='video/mp4'||output.blob.size>80*1024*1024)throw Error(label+' · o Prisma precisa gerar um MP4 de até 80 MB.');
   const handle=profile.username.replace(/[^a-z0-9._-]/gi,'');
-  const name=`${String(index+1).padStart(2,'0')}-${handle}-${projectId.slice(0,8)}.mp4`;
+  const sourceLabel=source.name.replace(/[^a-z0-9._-]/gi,'').slice(0,50);
+  const name=`${sourceLabel}-${String(index+1).padStart(2,'0')}-${handle}-${projectId.slice(0,8)}.mp4`;
   const metadata={
    outputId,accountId:profile.id,sourceId:source.id,
    file:{name,mime:output.blob.type,bytes:output.blob.size},
@@ -48,5 +49,6 @@ export async function renderSharedReelVersions({
    const result=await uploaded.json().catch(()=>null) as {error?:string}|null;
    throw Error(result?.error??label+' · falha ao salvar no Prisma.');
   }
+  progress(label+' · arquivo salvo',(index+1)/profiles.length*60);
  }
 }

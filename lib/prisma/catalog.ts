@@ -4,7 +4,7 @@ export const tools = [
  {id:'advanced',name:'Cloaker avançado',description:'Cor, movimento, textura e som. Controle cada detalhe.',category:'Vídeo',icon:'sliders',tag:'CONTROLE TOTAL',color:'violet'},
  {id:'profile',name:'Cloaker Avançado para spam',description:'Seu vídeo, a identidade de cada perfil. Templates e exportação em lote.',category:'Vídeo',icon:'copy',tag:'TEMPLATES · REELS',color:'violet'},
  {id:'profile-batch',name:'Cloaker para spam · Vídeos em lote',description:'Vários vídeos, uma modelo. O mesmo template e todos os ajustes do Avançado.',category:'Vídeo',icon:'layers',tag:'VÁRIOS VÍDEOS · UM PERFIL',color:'violet'},
- {id:'remux',name:'Camuflagem de vídeo',description:'Reorganize o contêiner e renove metadados sem recodificar.',category:'Vídeo',icon:'scan',tag:'SEM RECOMPRESSÃO',color:'blue'},
+ {id:'remux',name:'Hash e metadados',description:'Gere um arquivo com novo hash, preservando vídeo e áudio sem recompressão.',category:'Vídeo',icon:'scan',tag:'SEM RECOMPRESSÃO',color:'blue'},
  {id:'image',name:'Cloaker de imagem',description:'Explore cores, textura, enquadramento e metadados.',category:'Imagem',icon:'image',tag:'JPEG · PNG · WEBP',color:'rose'},
  {id:'audio',name:'Cloaker de áudio',description:'Ajuste tom, ritmo, volume, equalização e ambiência.',category:'Áudio',icon:'audio',tag:'ESTÚDIO DE SOM',color:'amber'},
  {id:'metadata',name:'Metadados',description:'Inspecione, limpe ou personalize os campos do arquivo.',category:'Utilitários',icon:'file',tag:'INSPECIONAR E EDITAR',color:'blue'},

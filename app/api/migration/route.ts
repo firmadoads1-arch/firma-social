@@ -1,12 +1,13 @@
 import {protectedUser,runtime,responseError,first,bucket} from '@/lib/server';
 import {assertSameOrigin,AppError,seal,id} from '@/lib/security';
 import {grant,exportData,restoreData,type Grant} from '@/lib/migration';
+import {importAccounts} from '@/lib/import-accounts';
 async function readBackup(req:Request){
  const limit=10000000;if(Number(req.headers.get('content-length'))>limit||!req.body)throw new AppError('Backup de dados muito grande ou vazio.');const reader=req.body.getReader(),chunks:Uint8Array[]=[];let size=0;for(;;){const {value,done}=await reader.read();if(done)break;size+=value.length;if(size>limit){await reader.cancel();throw new AppError('Backup de dados muito grande.');}chunks.push(value);}const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}try{return JSON.parse(new TextDecoder().decode(bytes));}catch{throw new AppError('Backup de dados inválido.');}
 }
 const headers={'Cache-Control':'no-store','Referrer-Policy':'no-referrer'};
 export async function POST(req:Request){try{
- if(req.headers.has('authorization')){const g=await grant(req);if(g.mode!=='import')throw new AppError('Autorização somente de exportação.',403);return Response.json(await restoreData(g,await readBackup(req)),{headers});}
+ if(req.headers.has('authorization')){const g=await grant(req);if(g.mode!=='import')throw new AppError('Autorização somente de exportação.',403);const backup=await readBackup(req);return Response.json(await (new URL(req.url).searchParams.get('accounts')==='1'?importAccounts(g,backup):restoreData(g,backup)),{headers});}
  assertSameOrigin(req);const user=await protectedUser();const body:any=await req.json();if(!['export','import'].includes(body.mode))throw new AppError('Escolha exportar ou importar.');
  const g:Grant={kind:'firma-migration-v1',owner:user.userId,mode:body.mode,expires:Date.now()+3600000,nonce:id()};return Response.json({grant:await seal(g,runtime().TOKEN_ENCRYPTION_KEY),expiresAt:g.expires},{headers});
 }catch(e){return responseError(e);}}

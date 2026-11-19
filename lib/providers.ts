@@ -1,6 +1,7 @@
 import {Platform} from './domain';
 import {AppError,seal,unseal,safeHttps} from './security';
 import {config,first,list,run,runtime,ProviderConfig} from './server';
+import {profilePhotoUrl} from './profile-photo';
 import {accountCover} from './editor-defaults';
 import {RemoteError,remoteError,type RemoteDiagnostic} from './provider-errors';
 export {RemoteError} from './provider-errors';
@@ -21,17 +22,25 @@ const form=(obj:Record<string,string>)=>({method:'POST',headers:{'Content-Type':
 export async function refreshInstagramIdentity(owner:string,accountId:string){
  const a=await first("SELECT * FROM accounts WHERE owner=? AND id=? AND platform='instagram'",owner,accountId);
  if(!a)throw new AppError('Perfil não encontrado.',404);
- if(a.state!=='connected'||!a.tokens||a.expires_at&&a.expires_at<=Date.now())return {accountId,status:'authorization_required',updated:false};
+ const attemptedAt=Date.now();
+ const mark=async(status:string)=>run('UPDATE accounts SET profile_sync_status=?,profile_attempt_at=? WHERE owner=? AND id=? AND tokens=?',status,attemptedAt,owner,a.id,a.tokens);
+ if(a.state!=='connected'||!a.tokens||a.expires_at&&a.expires_at<=attemptedAt){await mark('authorization_required');return {accountId,status:'authorization_required',updated:false};}
+ try{
  const c=await config(owner,'instagram');if(!c)throw new AppError('Configure o aplicativo Instagram.');
  const tokens=await unseal<Tokens>(a.tokens,runtime().TOKEN_ENCRYPTION_KEY);
- const raw=await api(`https://graph.instagram.com/${c.graphVersion??'v26.0'}/me?fields=user_id,username`,{headers:{Authorization:`Bearer ${tokens.access_token}`}});
+ const raw=await api(`https://graph.instagram.com/${c.graphVersion??'v26.0'}/me?fields=user_id,username,name,biography,profile_picture_url`,{headers:{Authorization:`Bearer ${tokens.access_token}`}});
  const p=raw.data?.[0]??raw;
  if(String(p.user_id??p.id)!==String(a.provider_id))throw new AppError('A identidade retornada não corresponde ao perfil salvo.',409);
  if(typeof p.username!=='string'||!/^\w[\w.]{0,29}$/.test(p.username))throw new AppError('O Instagram não devolveu um username válido.',502);
- const changed=p.username!==a.username;
- const cover=changed&&!a.cover_media_id?accountCover({username:a.username,coverMediaId:null,groupId:a.group_id},await list("SELECT id,name,mime,size,group_id AS groupId,created_at AS createdAt FROM media WHERE owner=? AND mime='image/jpeg'",owner)):null;
- const result=await run("UPDATE accounts SET username=?,display_name=CASE WHEN display_name=username THEN ? ELSE display_name END,cover_media_id=COALESCE(cover_media_id,?) WHERE owner=? AND id=? AND provider_id=? AND tokens=? AND state='connected'",p.username,p.username,cover?.id??null,owner,a.id,a.provider_id,a.tokens);
- return {accountId:a.id,status:result.meta.changes?'ok':'changed_concurrently',updated:!!result.meta.changes&&changed};
+ const displayName=typeof p.name==='string'?p.name.trim().slice(0,200):' ';
+ const biography=typeof p.biography==='string'?p.biography.slice(0,2200):a.biography??null;
+ const changed=p.username!==a.username||displayName!==a.display_name;
+ const freshPhoto=profilePhotoUrl(p.profile_picture_url);
+ const photo=freshPhoto??a.profile_picture_url??null;
+ const cover=p.username!==a.username&&!a.cover_media_id?accountCover({username:a.username,coverMediaId:null,groupId:a.group_id},await list("SELECT id,name,mime,size,group_id AS groupId,created_at AS createdAt FROM media WHERE owner=? AND mime='image/jpeg'",owner)):null;
+ const result=await run("UPDATE accounts SET profile_picture_url=?,profile_checked_at=?,profile_sync_status=?,profile_attempt_at=?,username=?,display_name=?,biography=?,cover_media_id=COALESCE(cover_media_id,?) WHERE owner=? AND id=? AND provider_id=? AND tokens=? AND state='connected'",photo,Date.now(),freshPhoto?'ok':'no_photo',attemptedAt,p.username,displayName||' ',biography,cover?.id??null,owner,a.id,a.provider_id,a.tokens);
+ return {accountId:a.id,status:result.meta.changes?(freshPhoto?'ok':'no_photo'):'changed_concurrently',updated:!!result.meta.changes&&changed,photoUpdated:!!result.meta.changes&&!!freshPhoto};
+ }catch(e){const status=e instanceof RemoteError&&(['190','102','invalid_token','access_token_expired','invalid_access_token'].includes(e.code))?'authorization_required':e instanceof RemoteError&&e.failure==='permissions'?'permission_required':e instanceof RemoteError&&e.retryable?'temporary':'unavailable';await mark(status);throw e;}
 }
 export function authorizationURL(platform:Platform,c:ProviderConfig,redirect:string,state:string,challenge:string,insights=false){
  const params:Record<string,string>={redirect_uri:redirect,response_type:'code',state};let base='';
@@ -68,12 +77,12 @@ export async function exchange(platform:Platform,c:ProviderConfig,code:string,re
    return result as Tokens;
   });
   const me=await oauthStep('profile_lookup',async()=>{
-   const profile=await api(`https://graph.instagram.com/${c.graphVersion??'v26.0'}/me?fields=user_id,username`,{headers:{Authorization:`Bearer ${tokens.access_token}`}});const result=profile.data?.[0]??profile;
+   const profile=await api(`https://graph.instagram.com/${c.graphVersion??'v26.0'}/me?fields=user_id,username,name`,{headers:{Authorization:`Bearer ${tokens.access_token}`}});const result=profile.data?.[0]??profile;
    const profileId=String(result.user_id??result.id??short.user_id);
    if(!profileId||['undefined','null'].includes(profileId)||typeof result.username!=='string'||!result.username)throw new AppError('O Instagram não devolveu uma identidade válida.');
    return {...result,profileId};
   });
-  providerId=me.profileId;username=me.username;displayName=me.username;tokens.scope=Array.isArray(short.permissions)?short.permissions.join(','):short.permissions??'instagram_business_basic,instagram_business_content_publish';
+  providerId=me.profileId;username=me.username;displayName=typeof me.name==='string'&&me.name.trim()?me.name.trim().slice(0,200):' ';tokens.scope=Array.isArray(short.permissions)?short.permissions.join(','):short.permissions??'instagram_business_basic,instagram_business_content_publish';
  }else if(platform==='youtube'){
   tokens=await api('https://oauth2.googleapis.com/token',form({client_id:c.clientId,client_secret:c.clientSecret,code,redirect_uri:redirect,grant_type:'authorization_code',code_verifier:verifier}));
   const me=await api('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',{headers:{Authorization:`Bearer ${tokens.access_token}`}});const ch=me.items?.[0];if(!ch)throw new AppError('Esta conta Google não possui um canal do YouTube.');providerId=ch.id;username=ch.snippet.customUrl??ch.snippet.title;displayName=ch.snippet.title;

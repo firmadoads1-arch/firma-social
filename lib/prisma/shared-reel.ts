@@ -7,8 +7,8 @@ export function sharedReelFolder(title: string) {
  return 'prisma posts / '+title;
 }
 
-export async function sharedReelOutputId(batchId: string, accountId: string) {
- const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('prisma-shared-reel:'+batchId+':'+accountId));
+export async function sharedReelOutputId(batchId: string, accountId: string, sourceId?: string) {
+ const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('prisma-shared-reel:'+batchId+':'+accountId+(sourceId?':'+sourceId:'')));
  const bytes = new Uint8Array(digest).slice(0,16);
  bytes[6] = (bytes[6]&15)|64;
  bytes[8] = (bytes[8]&63)|128;
@@ -16,13 +16,7 @@ export async function sharedReelOutputId(batchId: string, accountId: string) {
  return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');
 }
 
-export function sharedReelSettings(position: number): Settings {
- return {
-  ...defaults,
-  maxSide:1920,
-  contrast:Number((1.012+position*.0004).toFixed(4)),
-  brightness:((position%7)-3)*.002,
-  volume:Number((.94+position*.0012).toFixed(4)),
-  bass:Number((.25+position*.01).toFixed(2)),
- };
+// Every new per-profile export keeps the source tracks unchanged.
+export function sharedReelSettings(_position: number): Settings {
+ return {...defaults,metaMode:'strip'};
 }

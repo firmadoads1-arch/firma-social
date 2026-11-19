@@ -1,6 +1,7 @@
 import {groupScope,requireItems} from '@/lib/group-scope';
 import {editingAction,assetRows,accountRows,prepareOptions} from '@/lib/editing';
 import {processQueue,resumeInstagramPost} from '@/lib/queue';
+import {dailyStoryAction} from '@/lib/daily-stories';
 import {manualStory} from '@/lib/story-links';
 import {schedulerEnabled} from '@/lib/scheduler';
 import {z} from 'zod';
@@ -31,7 +32,7 @@ export async function POST(request:Request){try{
    if(exists){if(exists.owner!==owner)throw new AppError('Conteúdo não encontrado.',404);await requireItems(owner,group,'posts',[p.id]);return Response.json({id:p.id,status:exists.status,immediate:true});}
   }
   const manual=manualStory(p);const savedStatus=p.status==='scheduled'&&manual?'manual_pending':p.status;let old:any=null;
-  if(p.id&&!newImmediate){old=await first('SELECT * FROM posts WHERE id=? AND owner=?',p.id,owner);if(!old)throw new AppError('Conteúdo não encontrado.',404);if(old.batch_id&&JSON.parse(old.options).sharedReelBatch)throw new AppError('Cancele este envio do lote antes de preparar outra versão.',409);if(!['draft','pending_approval','scheduled','cancelled','manual_pending'].includes(old.status))throw new AppError('Duplique este conteúdo para criar uma nova versão.',409);if(old.version!==p.version)throw new AppError('Este conteúdo mudou. Atualize a página antes de salvar.',409);}
+  if(p.id&&!newImmediate){old=await first('SELECT * FROM posts WHERE id=? AND owner=?',p.id,owner);if(!old)throw new AppError('Conteúdo não encontrado.',404);if(old.batch_id&&JSON.parse(old.options).sharedReelBatch)throw new AppError('Cancele este envio do lote antes de preparar outra versão.',409);if(old.recurrence_key)throw new AppError('Este Story pertence a uma rotina diária. Pause a rotina ou duplique o conteúdo para criar outra versão.',409);if(!['draft','pending_approval','scheduled','cancelled','manual_pending'].includes(old.status))throw new AppError('Duplique este conteúdo para criar uma nova versão.',409);if(old.version!==p.version)throw new AppError('Este conteúdo mudou. Atualize a página antes de salvar.',409);}
   if(old&&await first("SELECT id FROM deliveries WHERE post_id=? AND owner=? AND status='manual_published'",p.id,owner))throw new AppError('Este Story tem publicações manuais registradas. Duplique para preparar outro conteúdo.',409);
   const [assets,accounts]=await Promise.all([assetRows(owner),accountRows(owner)]);await requireItems(owner,group,'accounts',p.accountIds);const oldMids:string[]=old?JSON.parse(old.media_ids):[];await requireItems(owner,group,'media',p.mediaIds.filter(x=>!oldMids.includes(x)));if(p.options.instagramCoverMediaId&&p.options.instagramCoverMediaId!==JSON.parse(old?.options??'{}').instagramCoverMediaId)await requireItems(owner,group,'media',[p.options.instagramCoverMediaId]);prepareOptions(p,accounts,assets,old);const selected=assets.filter(a=>p.mediaIds.includes(a.id));if(selected.length!==p.mediaIds.length)throw new AppError('Mídia não encontrada no seu workspace.');
   const coverIssue=validateReelCover(p,assets);if(coverIssue)throw new AppError(coverIssue);
@@ -46,7 +47,14 @@ export async function POST(request:Request){try{
    statements.push(database().prepare("UPDATE posts SET title=?,caption=?,captions=?,platforms=?,account_ids=?,media_ids=?,format=?,status=?,scheduled_at=?,options=?,version=version+1,write_token=?,updated_at=? WHERE id=? AND owner=? AND version=? AND status IN ('draft','pending_approval','scheduled','cancelled','manual_pending') AND NOT EXISTS (SELECT 1 FROM deliveries completed WHERE completed.post_id=posts.id AND completed.owner=posts.owner AND completed.status='manual_published')").bind(p.title,p.caption,JSON.stringify(p.captions),JSON.stringify([...new Set(p.platforms)]),JSON.stringify([...new Set(p.accountIds)]),JSON.stringify(p.mediaIds),p.format,savedStatus,p.scheduledAt,JSON.stringify(p.options),marker,now,pid,owner,p.version!));
    statements.push(database().prepare('DELETE FROM deliveries WHERE post_id=? AND owner=? AND EXISTS (SELECT 1 FROM posts WHERE id=? AND write_token=?)').bind(pid,owner,pid,marker));
   } else statements.push(database().prepare((newImmediate?'INSERT OR IGNORE':'INSERT')+' INTO posts (id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,write_token,created_at,updated_at,group_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?)').bind(pid,owner,p.title,p.caption,JSON.stringify(p.captions),JSON.stringify([...new Set(p.platforms)]),JSON.stringify([...new Set(p.accountIds)]),JSON.stringify(p.mediaIds),p.format,savedStatus,p.scheduledAt,JSON.stringify(p.options),marker,now,now,group));
-  if(p.status==='scheduled')for(const aid of new Set(p.accountIds)){const a=accounts.find(x=>x.id===aid);statements.push(database().prepare('INSERT INTO deliveries (id,post_id,owner,account_id,platform,status,context,attempts,next_run,created_at,updated_at) SELECT ?,?,?,?,?,?,?,0,?,?,? WHERE EXISTS (SELECT 1 FROM posts WHERE id=? AND write_token=?)').bind(id(),pid,owner,aid,a.platform,manual?'manual_pending':'pending','{}',p.scheduledAt??now,now,now,pid,marker));}
+  if(p.status==='scheduled'){
+   const destinations=[...new Set(p.accountIds)].map(aid=>({id:id(),aid,platform:accounts.find(x=>x.id===aid).platform}));
+   // Small arrays, one atomic transaction: no partial post after a lost response.
+   for(let offset=0;offset<destinations.length;offset+=20){
+    statements.push(database().prepare(`INSERT INTO deliveries (id,post_id,owner,account_id,platform,status,context,attempts,next_run,created_at,updated_at)
+     SELECT j.value->>'$.id',?,?,j.value->>'$.aid',j.value->>'$.platform',?,'{}',0,?,?,? FROM json_each(?) j WHERE EXISTS (SELECT 1 FROM posts WHERE id=? AND write_token=?)`).bind(pid,owner,manual?'manual_pending':'pending',p.scheduledAt??now,now,now,JSON.stringify(destinations.slice(offset,offset+20)),pid,marker));
+   }
+  }
   const result=await database().batch(statements);if(!result[0].meta.changes&&newImmediate){const existing=await first('SELECT status FROM posts WHERE id=? AND owner=?',pid,owner);if(existing)return Response.json({id:pid,status:existing.status,immediate:true});}
   if(!result[0].meta.changes)throw new AppError('Este conteúdo mudou ou começou a ser publicado. Atualize antes de continuar.',409);
   await event(owner,immediate?'Envio imediato solicitado':p.status==='scheduled'?(manual?'Story preparado para finalizar no Instagram':'Publicação agendada'):p.status==='pending_approval'?'Conteúdo enviado para revisão':'Rascunho salvo',p.title,pid);
@@ -107,6 +115,7 @@ export async function POST(request:Request){try{
   const v=z.object({name:z.string().trim().min(1).max(80),caption:z.string().trim().min(1).max(5000)}).parse(data);await run('INSERT INTO templates (id,owner,name,caption,created_at,group_id) VALUES (?,?,?,?,?,?)',id(),owner,v.name,v.caption,now,group);return Response.json({ok:true});
  }
  if(action==='template.delete'){await run('DELETE FROM templates WHERE id=? AND owner=?',z.string().uuid().parse(data.id),owner);return Response.json({ok:true});}
+ if(action==='rule.save'&&data.mode==='daily_story'||['rule.toggle','rule.delete'].includes(action)){await protectedUser();const result=await dailyStoryAction(action,data,owner,group);if(result)return Response.json(result);}
  if(action==='rule.save'){
   const v=z.object({name:z.string().trim().min(1).max(80),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),weekdays:z.array(z.number().int().min(0).max(6)).min(1),caption:z.string().max(5000),accountIds:z.array(z.string().uuid()).max(40).default([]),mediaIds:z.array(z.string().uuid()).max(100).default([])}).parse(data);
   await requireItems(owner,group,'media',v.mediaIds);await requireItems(owner,group,'accounts',v.accountIds);const mids=await list('SELECT id FROM media WHERE owner=?',owner);if(v.mediaIds.some(x=>!mids.find(m=>m.id===x)))throw new AppError('Mídia inválida.');const aids=await list('SELECT id FROM accounts WHERE owner=?',owner);if(v.accountIds.some(x=>!aids.find(a=>a.id===x)))throw new AppError('Conta inválida.');

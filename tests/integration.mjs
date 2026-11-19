@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import ts from 'typescript';
 const root=process.cwd(),out=fs.mkdtempSync(path.join(tmpdir(),'firma-check-'));
 fs.symlinkSync(path.join(root,'node_modules'),path.join(out,'node_modules'),'dir');
-const files=['lib/prisma/catalog.ts','lib/prisma/shared-reel.ts','lib/prisma/store.ts','lib/prisma/security.ts','lib/prisma/template-api.ts','lib/prisma/profile-types.ts','app/api/accounts/refresh/route.ts','lib/editor-defaults.ts','lib/group-scope.ts','lib/editing.ts','lib/workspace-access.ts','lib/story-links.ts','lib/analytics.ts','lib/analytics-model.ts','app/api/analytics/route.ts','lib/publishing-limits.ts','lib/scheduler.ts','lib/runner-auth.ts','lib/media-delivery.ts','app/api/publish-media/[token]/route.ts','lib/migration.ts','lib/access-identity.ts','app/api/migration/route.ts','lib/connection-links.ts','app/api/connection-links/[platform]/route.ts','app/api/connect/route.ts','app/connect/route.ts','lib/domain.ts','lib/oauth.ts','lib/connections.ts','app/api/oauth/result/route.ts','lib/references.ts','lib/reference-store.ts','lib/security.ts','lib/providers.ts','lib/provider-errors.ts','lib/server.ts','lib/queue.ts','app/api/app/route.ts','app/api/runner/route.ts','app/api/upload/route.ts','app/api/media/[id]/route.ts','app/api/oauth/[platform]/callback/route.ts','app/api/oauth/[platform]/start/route.ts'];
+const files=['lib/profile-availability.ts','lib/profile-verification.ts','app/api/accounts/verify/route.ts','lib/profile-image.ts','app/api/accounts/[id]/photo/route.ts','lib/daily-stories.ts','lib/profile-photo.ts','lib/import-accounts.ts','lib/prisma/catalog.ts','lib/prisma/shared-reel.ts','lib/prisma/store.ts','lib/prisma/security.ts','lib/prisma/template-api.ts','lib/prisma/profile-types.ts','app/api/accounts/refresh/route.ts','lib/editor-defaults.ts','lib/group-scope.ts','lib/editing.ts','lib/workspace-access.ts','lib/story-links.ts','lib/analytics.ts','lib/analytics-model.ts','app/api/analytics/route.ts','lib/publishing-limits.ts','lib/scheduler.ts','lib/runner-auth.ts','lib/media-delivery.ts','app/api/publish-media/[token]/route.ts','lib/migration.ts','lib/access-identity.ts','app/api/migration/route.ts','lib/connection-links.ts','app/api/connection-links/[platform]/route.ts','app/api/connect/route.ts','app/connect/route.ts','lib/domain.ts','lib/oauth.ts','lib/connections.ts','app/api/oauth/result/route.ts','lib/references.ts','lib/reference-store.ts','lib/security.ts','lib/providers.ts','lib/provider-errors.ts','lib/server.ts','lib/queue.ts','app/api/app/route.ts','app/api/runner/route.ts','app/api/upload/route.ts','app/api/media/[id]/route.ts','app/api/oauth/[platform]/callback/route.ts','app/api/oauth/[platform]/start/route.ts'];
 for(const file of files){const dest=path.join(out,file.replace(/\.ts$/,'.mjs'));fs.mkdirSync(path.dirname(dest),{recursive:true});let source=fs.readFileSync(path.join(root,file),'utf8');source=source.replace(/from ['"]([^'"]+)['"]/g,(all,spec)=>{if(spec==='cloudflare:workers')return `from '${pathToFileURL(path.join(out,'env.mjs'))}'`;if(spec==='@/app/chatgpt-auth')return `from '${pathToFileURL(path.join(out,'auth.mjs'))}'`;if(spec.startsWith('@/'))return `from '${pathToFileURL(path.join(out,spec.slice(2)+'.mjs'))}'`;if(spec.startsWith('.'))return `from '${spec}.mjs'`;return all;});fs.writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);}
 fs.writeFileSync(path.join(out,'env.mjs'),'export const env=globalThis.testEnv;');fs.writeFileSync(path.join(out,'auth.mjs'),'export async function getChatGPTUser(){return globalThis.testUser;}');
 let db=new DatabaseSync(':memory:');for(const file of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(path.join(root,'drizzle',file),'utf8'));
@@ -34,10 +34,35 @@ const payload={title:'Original content',caption:'Caption',platforms:['instagram'
 await check('Owned data stays private and cross-owner references are rejected',async()=>{globalThis.testUser=userB;const state=await(await route.GET()).json();assert.equal(state.media.length,0);assert.equal(state.accounts.length,0);assert.equal((await action('post.save',payload)).status,400);assert.equal((await mediaRoute.GET(new Request('https://firma.test/api/media/'+mid),{params:Promise.resolve({id:mid})})).status,404);globalThis.testUser=userA;const ownerState=JSON.stringify(await(await route.GET()).json());assert(!ownerState.includes('FAKE-ONLY'));assert(!ownerState.includes('fake-secret'));});
 let pid;
 await check('Scheduling creates one delivery per account and requires a date',async()=>{assert.equal((await action('post.save',{...payload,scheduledAt:null})).status,400);const result=await action('post.save',{...payload,accountIds:[aid,aid]});assert.equal(result.status,200);pid=(await result.json()).id;assert.equal(row('SELECT count(*) n FROM deliveries WHERE post_id=?',pid).n,1);});
+await check('81 destinations save atomically in small chunks without duplicate deliveries',async()=>{
+ const original=row('SELECT * FROM accounts WHERE id=?',aid),columns=Object.keys(original),ids=Array.from({length:81},()=>security.id());
+ for(const accountId of ids)run(`INSERT INTO accounts (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,...columns.map(k=>k==='id'?accountId:k==='provider_id'?accountId:original[k]));
+ try{
+  const response=await action('post.save',{...payload,accountIds:ids});const body=await response.json();assert.equal(response.status,200,JSON.stringify(body));
+  assert.equal(row('SELECT count(*) n FROM deliveries WHERE post_id=?',body.id).n,81);
+  assert.equal(row('SELECT count(DISTINCT account_id) n FROM deliveries WHERE post_id=?',body.id).n,81);
+  await action('post.cancel',{id:body.id});run('DELETE FROM deliveries WHERE post_id=?',body.id);run('DELETE FROM posts WHERE id=?',body.id);
+ }finally{for(const accountId of ids)run('DELETE FROM accounts WHERE id=?',accountId);}
+});
 await check('Stale edits cannot delete or replace a newer queue',async()=>{const current=row('SELECT * FROM posts WHERE id=?',pid),delivery=row('SELECT id FROM deliveries WHERE post_id=?',pid);beforeBatch=()=>run('UPDATE posts SET version=version+1,title=? WHERE id=?','Concurrent edit',pid);const result=await action('post.save',{...payload,id:pid,version:current.version,title:'Stale overwrite'});assert.equal(result.status,409);assert.equal(row('SELECT title FROM posts WHERE id=?',pid).title,'Concurrent edit');assert.equal(row('SELECT id FROM deliveries WHERE post_id=?',pid).id,delivery.id);});
 await check('Cancellation before work starts removes the post from due work',async()=>{assert.equal((await action('post.cancel',{id:pid})).status,200);assert.equal(row('SELECT status FROM posts WHERE id=?',pid).status,'cancelled');assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',pid).status,'cancelled');});
 async function scheduled(){const response=await action('post.save',payload);assert.equal(response.status,200);const {id}=await response.json();run('UPDATE deliveries SET next_run=0 WHERE post_id=?',id);run('UPDATE posts SET scheduled_at=0 WHERE id=?',id);return id;}
 let requests=[];globalThis.fetch=async(url,init={})=>{requests.push({url:String(url),method:init.method??'GET'});if(String(url).includes('media_publish'))return Response.json({id:'published-a'});if(String(url).endsWith('/media'))return Response.json({id:'container-a'});return Response.json({status_code:'FINISHED'});};
+await check('Ready existing containers run before older pending destinations without recreating containers',async()=>{
+ const original=row('SELECT * FROM accounts WHERE id=?',aid),columns=Object.keys(original),second=security.id(),calls=[],previous=globalThis.fetch;
+ run(`INSERT INTO accounts (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,...columns.map(k=>k==='id'?second:k==='provider_id'?second:original[k]));
+ let target;
+ try{
+  const response=await action('post.save',{...payload,accountIds:[aid,second]});target=(await response.json()).id;
+  run('UPDATE deliveries SET next_run=0 WHERE post_id=?',target);
+  run("UPDATE deliveries SET status='processing',context=?,next_run=1 WHERE post_id=? AND account_id=?",await security.seal({container:'already-prepared'},testEnv.TOKEN_ENCRYPTION_KEY),target,second);
+  globalThis.fetch=async(url,init={})=>{calls.push({url:String(url),method:init.method??'GET'});if(String(url).includes('media_publish'))return Response.json({id:'published-priority'});if(String(url).endsWith('/media'))return Response.json({id:'new-container'});return Response.json({status_code:'FINISHED'});};
+  await queue.processQueue(userA.userId,'manual',target);
+  assert(calls[0].url.includes('/already-prepared?fields=status_code'));assert.equal(calls[0].method,'GET');
+  assert(calls[1].url.includes('/media_publish'));assert.equal(calls.filter(c=>c.url.endsWith('/media')).length,1);
+  assert.equal(row("SELECT count(*) n FROM deliveries WHERE post_id=? AND status='published'",target).n,2);
+ }finally{globalThis.fetch=previous;if(target){run('DELETE FROM deliveries WHERE post_id=?',target);run('DELETE FROM posts WHERE id=?',target);}run('DELETE FROM accounts WHERE id=?',second);requests=[];}
+});
 await check('Mixed carousel checkpoints children and waits for video readiness without duplicate creation',async()=>{
  const photo=security.id(),original=row('SELECT * FROM media WHERE id=?',mid),cols=Object.keys(original);run(`INSERT INTO media (${cols.join(',')}) VALUES (${cols.map(()=>'?').join(',')})`,...cols.map(k=>k==='id'?photo:k==='mime'?'image/jpeg':original[k]));
  const previous=globalThis.fetch,calls=[];let ready=false,n=0;
@@ -388,6 +413,18 @@ await check('Public service runner requires a secret, scopes work to its owner a
  globalThis.testUser=userA;const snapshot=await(await route.GET()).json();assert.equal(snapshot.scheduler.enabled,true);assert.equal(snapshot.scheduler.healthy,true);assert.equal(snapshot.scheduler.lastCheckedAt,result.checkedAt);
  globalThis.testUser=userB;assert.equal((await(await route.GET()).json()).scheduler.enabled,false);globalThis.testUser=userA;
 });
+await check('Runner status includes active leases and future pending-only work without treating them as an empty queue',async()=>{
+ const owner='queue-status-qa',ids={accounts:security.id(),media:security.id(),posts:security.id(),deliveries:security.id()},oldUser=globalThis.testUser;
+ const clone=(table,sourceId,patch)=>{const original=row(`SELECT * FROM ${table} WHERE id=?`,sourceId),columns=Object.keys(original);run(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,...columns.map(k=>Object.hasOwn(patch,k)?patch[k]:original[k]));};
+ const leaseUntil=Date.now()+60000;
+ clone('accounts',aid,{id:ids.accounts,owner});clone('media',mid,{id:ids.media,owner});
+ clone('posts',pid,{id:ids.posts,owner,status:'publishing',account_ids:JSON.stringify([ids.accounts]),media_ids:JSON.stringify([ids.media]),batch_id:null,recurrence_key:null});
+ clone('deliveries',row('SELECT id FROM deliveries WHERE post_id=?',pid).id,{id:ids.deliveries,owner,post_id:ids.posts,account_id:ids.accounts,status:'working',next_run:0,lease:'active-lease',lease_until:leaseUntil});
+ try{globalThis.testUser={...userA,userId:owner};const first=await(await runner.GET(new Request('https://firma.test/api/runner'))).json();assert.equal(first.queue.pending,0);assert.equal(first.queue.processing,0);assert.equal(first.queue.working,1);assert.equal(first.queue.nextCheckAt,leaseUntil);
+  const future=Date.now()+3600000;run("UPDATE deliveries SET status='pending',lease=NULL,lease_until=NULL,next_run=? WHERE id=?",future,ids.deliveries);run("UPDATE posts SET status='scheduled' WHERE id=?",ids.posts);
+  const second=await(await runner.GET(new Request('https://firma.test/api/runner'))).json();assert.equal(second.queue.pending,1);assert.equal(second.queue.working,0);assert.equal(second.queue.nextCheckAt,future);
+ }finally{globalThis.testUser=oldUser;for(const table of ['deliveries','posts','accounts','media'])run(`DELETE FROM ${table} WHERE id=?`,ids[table]);}
+});
 await check('Inactive scheduling is rejected instead of silently accepting an unattended publication',async()=>{
  testEnv.SCHEDULER_ENABLED='false';const before=row('SELECT count(*) n FROM posts').n;const result=await action('post.save',payload);assert.equal(result.status,409);assert.equal(row('SELECT count(*) n FROM posts').n,before);testEnv.SCHEDULER_ENABLED='true';
  const scheduler=await mod('lib/scheduler');assert.equal(scheduler.schedulerHealth(true,new Date(Date.now()-91*60000).toISOString(),1).healthy,false);
@@ -667,8 +704,8 @@ await check('Public workspace is opt-in, mapped to its owner and protects accoun
   assert.equal((await action('account.preferences',{id:a,groupId:h,coverMediaId:null})).status,200);assert((await server.state(owner,'QA',h)).posts.some(p=>p.id===historic));await action('account.preferences',{id:a,groupId:g,coverMediaId:null});
  });
  await check('Automatic covers match exact @username per destination and preserve scheduled snapshots and legacy captions',async()=>{
-  const p=JSON.parse(row('SELECT options FROM posts WHERE id=?',shared).options);assert.deepEqual(p.instagramAccountCovers,{[a]:cover,[b]:coverB});assert.equal(p.location,'São Paulo, SP');assert.equal(p.locationMode,'caption');
-  const defaults=await mod('lib/editor-defaults');assert.equal(defaults.publishCaption('Antes',{},'video'),'Antes');assert.equal(defaults.publishCaption('Olá',p,'video'),'Olá\n\n📍 São Paulo, SP');assert.equal(defaults.publishCaption('X',{...p,locationMode:'none'},'video'),'X');
+  const p=JSON.parse(row('SELECT options FROM posts WHERE id=?',shared).options);assert.deepEqual(p.instagramAccountCovers,{[a]:cover,[b]:coverB});assert.equal(p.location,undefined);assert.equal(p.locationMode,'none');
+  const defaults=await mod('lib/editor-defaults');assert.equal(defaults.publishCaption('Antes',{},'video'),'Antes');assert.equal(defaults.publishCaption('Olá',p,'video'),'Olá');assert.equal(defaults.publishCaption('X',{...p,locationMode:'none'},'video'),'X');
   assert.equal((await action('account.preferences',{id:a,groupId:g,coverMediaId:wrong})).status,200);assert.equal(JSON.parse(row('SELECT options FROM posts WHERE id=?',normal).options).instagramAccountCovers[a],cover);
   const custom=(await(await action('post.save',{...post,options:{coverMode:'custom',instagramCoverMediaId:wrong,locationMode:'none'}})).json()).id;const customOpts=JSON.parse(row('SELECT options FROM posts WHERE id=?',custom).options);assert.equal(defaults.coverForDelivery(customOpts,a),wrong);assert.equal(customOpts.locationMode,'none');
   await action('account.preferences',{id:a,groupId:g,coverMediaId:null});
@@ -689,7 +726,7 @@ await check('Public workspace is opt-in, mapped to its owner and protects accoun
   assert.equal((await queue.processQueue(owner)).processed,1);assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',posts[1].id).status,'uncertain');assert.equal((await queue.processQueue(owner)).processed,0);
  });
  await check('Prisma batch requires each saved version and waits three minutes across accounts',async()=>{
-  const payload={requestId:security.id(),accountIds:[b,a],title:'Lançamento Prisma',mediaId:videos[0],coverId:cover,caption:'Mesma descrição',startsAt:Date.now()-300000,approved:true};
+  const payload={requestId:security.id(),accountIds:[b,a],title:'Lançamento Prisma',mediaId:videos[0],coverId:cover,caption:'Mesma descrição',startsAt:Date.now()+86400000,approved:true,immediate:true};
   assert.equal((await scoped(g,'post.sharedReelBatch',payload)).status,409);
   assert.equal((await scoped(null,'post.sharedReelBatch',{...payload,accountIds:[a,a]})).status,400);
   assert.equal((await scoped(null,'post.sharedReelBatch',{...payload,coverId:videos[1]})).status,400);
@@ -730,7 +767,7 @@ await check('Public workspace is opt-in, mapped to its owner and protects accoun
   }
   assert.equal((await scoped(null,'post.save',{...post,id:posts[0].id,version:1})).status,409);
   const realNow=Date.now,realFetch=globalThis.fetch,sent=[];
-  assert(receipt.startsAt>=Date.now()+59000);
+  assert(receipt.startsAt<=Date.now(),'Immediate Prisma batch ignores future form date after editing');
   let clock=receipt.startsAt+300000;
   try{
    Date.now=()=>clock;
@@ -750,7 +787,45 @@ await check('Public workspace is opt-in, mapped to its owner and protects accoun
    clock+=1;assert.equal((await queue.processQueue(owner,'manual',posts[1].id)).processed,1);
    assert.deepEqual(sent.map(x=>x.url.match(/\/ig-([^/]+)\/media_publish$/)?.[1]),[b,a]);
    assert.equal(sent[1].at-sent[0].at,180000);
+   // One uncertain profile waits for cooldown, then releases the OTHER profile.
+   run("UPDATE deliveries SET status='uncertain',error='Conferir na rede',updated_at=? WHERE post_id=?",clock,posts[0].id);
+   run("UPDATE posts SET status='uncertain' WHERE id=?",posts[0].id);
+   run("UPDATE deliveries SET status='pending',context='{}',remote_id=NULL,next_run=0 WHERE post_id=?",posts[1].id);run("UPDATE posts SET status='scheduled' WHERE id=?",posts[1].id);
+   assert.equal((await queue.processQueue(owner,'manual',posts[1].id)).processed,0);
+   clock+=180000;assert.equal((await queue.processQueue(owner,'manual',posts[1].id)).processed,1);
+   assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',posts[0].id).status,'uncertain');
+
   }finally{Date.now=realNow;globalThis.fetch=realFetch;}
+ });
+ await check('Multiple videos produce separate posts for 80 profiles with spacing and idempotent receipts',async()=>{
+  const selected=[a,b];
+  for(let i=2;i<80;i++){const aid=security.id();const original=row('SELECT * FROM accounts WHERE id=?',a),columns=Object.keys(original);run(`INSERT INTO accounts (${columns.join(',')}) VALUES (${columns.map(()=>'?').join(',')})`,...columns.map(k=>k==='id'?aid:k==='provider_id'?'multi-'+i:k==='username'?'multi'+i:original[k]));selected.push(aid);}
+  const payload={requestId:security.id(),accountIds:selected,mediaIds:videos.slice(0,10),intervalMinutes:360,title:'Multi videos',coverIds:Object.fromEntries(videos.slice(0,10).map((mid,i)=>[mid,i%2?coverB:cover])),caption:'Sem localização',startsAt:Date.now()+86400000,approved:true};
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',{...payload,intervalMinutes:0})).status,400);
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',{...payload,coverIds:{}})).status,400);
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',{...payload,coverIds:{...payload.coverIds,[videos[0]]:videos[0]}})).status,400);
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',{...payload,coverIds:{...payload.coverIds,[videos[12]]:cover}})).status,400);
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',{...payload,mediaIds:[videos[0],videos[0]]})).status,400);
+  assert.equal((await scoped(null,'post.prepareSharedReelBatch',payload)).status,200);
+  assert.equal((await scoped(null,'post.sharedReelBatch',payload)).status,409);
+  const {sharedReelOutputId}=await mod('lib/prisma/shared-reel');
+  for(const sourceId of payload.mediaIds)for(const accountId of selected){
+   const mid=await sharedReelOutputId(payload.requestId,accountId,sourceId);
+   const file={name:mid+'.mp4',mime:'video/mp4',bytes:32},bytes=new Uint8Array(32);bytes.set(new TextEncoder().encode('ftyp'),4);
+   const metadata=JSON.stringify({outputId:mid,accountId,sourceId,file}),params=new URLSearchParams({project:payload.requestId,uploadId:mid,name:file.name,tool:'shared-reel',kind:'export',metadata});
+   const prisma=await mod('lib/prisma/store');
+   const saved=await prisma.handle(new Request('https://firma.test/api/prisma/files?'+params,{method:'POST',headers:{origin:'https://firma.test','content-type':file.mime,'content-length':'32'},body:bytes}));assert.equal(saved.status,201,await saved.text());
+  }
+  const response=await scoped(null,'post.sharedReelBatch',payload),receipt=await response.json();assert.equal(response.status,200,JSON.stringify(receipt));assert.equal(receipt.count,payload.mediaIds.length*80);
+  const posts=rows('SELECT * FROM posts WHERE batch_id=? ORDER BY batch_position',payload.requestId);assert.equal(posts.length,payload.mediaIds.length*80);
+  for(const [i,p] of posts.entries()) {assert.equal(JSON.parse(p.account_ids)[0],selected[i%80]);assert.equal(JSON.parse(p.media_ids).length,1);assert.equal(p.scheduled_at,receipt.startsAt+Math.floor(i/80)*360*60000+(i%80)*180000);assert.equal(JSON.parse(p.options).locationMode,'none');assert.equal(JSON.parse(p.options).instagramCoverMediaId,payload.coverIds[payload.mediaIds[Math.floor(i/80)]]);}
+  assert.equal((await scoped(null,'post.sharedReelBatch',payload)).status,200);assert.equal(rows('SELECT id FROM posts WHERE batch_id=?',payload.requestId).length,posts.length);
+  assert.equal((await scoped(null,'post.sharedReelBatch',{...payload,coverIds:{...payload.coverIds,[videos[0]]:coverB}})).status,409);
+  const publishedAt=Date.now();run("UPDATE deliveries SET status='published',updated_at=? WHERE post_id=?",publishedAt,posts[0].id);
+  const cooldown=row(`SELECT ${queue.batchCooldownUntil('d','b')} AS until FROM deliveries d JOIN posts b ON b.id=d.post_id WHERE b.id=?`,posts[80].id);assert.equal(cooldown.until,publishedAt+360*60000);
+  run('DELETE FROM deliveries WHERE post_id IN (SELECT id FROM posts WHERE batch_id=?)',payload.requestId);run('DELETE FROM posts WHERE batch_id=?',payload.requestId);run('DELETE FROM publish_batches WHERE id=?',payload.requestId);
+  run('DELETE FROM media WHERE id IN (SELECT id FROM prisma_files WHERE project_id=?)',payload.requestId);run('DELETE FROM prisma_files WHERE project_id=?',payload.requestId);run('DELETE FROM prisma_projects WHERE id=?',payload.requestId);
+  for(const aid of selected.slice(2))run('DELETE FROM accounts WHERE id=?',aid);
  });
  await check('Bulk moves keep references; deleting a selection keeps routine, batch and profile assets and removes only unused objects',async()=>{
   assert.equal((await scoped(g,'media.move',{ids:[unused,other],folder:'Reels'})).status,409);const moved=await(await scoped(g,'media.move',{ids:[unused,videos[3]],folder:'Reels'})).json();assert.equal(moved.moved,2);
@@ -790,14 +865,150 @@ await check('Username synchronization uses stable identity and preserves connect
  run("INSERT INTO provider_configs(id,owner,platform,encrypted,updated_at) VALUES (?,?,?,?,?)",security.id(),owner,'instagram',await security.seal({clientId:'fake',clientSecret:'fake'},testEnv.TOKEN_ENCRYPTION_KEY),Date.now());
  const coverId=security.id();run("INSERT INTO media(id,owner,name,mime,size,storage_key,folder,created_at,group_id) VALUES (?,?,?,?,?,?,?,?,?)",coverId,owner,'old.name.jpg','image/jpeg',50,'fake-cover','Geral',Date.now(),group);
  const previousFetch=globalThis.fetch;
- try{globalThis.fetch=async(url,init)=>{assert.equal(new URL(url).hostname,'graph.instagram.com');assert.equal(new URL(url).searchParams.get('fields'),'user_id,username');assert.equal(init.headers.Authorization,'Bearer FAKE-RENAME-ONLY');return Response.json({user_id:'123456789',username:'new.name'});};
- const result=await providers.refreshInstagramIdentity(owner,accountId);assert(result.updated);let a=row('SELECT * FROM accounts WHERE id=?',accountId);assert.equal(a.username,'new.name');assert.equal(a.display_name,'new.name');assert.equal(a.group_id,group);assert.equal(a.cover_media_id,coverId);assert.equal(a.tokens,ciphertext);assert.equal(a.state,'connected');
+ try{globalThis.fetch=async(url,init)=>{assert.equal(new URL(url).hostname,'graph.instagram.com');assert.equal(new URL(url).searchParams.get('fields'),'user_id,username,name,biography,profile_picture_url');assert.equal(init.headers.Authorization,'Bearer FAKE-RENAME-ONLY');return Response.json({user_id:'123456789',username:'new.name',name:'Nome atualizado',biography:'Minha bio\nSegunda linha',profile_picture_url:'https://scontent.cdninstagram.com/profile.jpg?size=150'});};
+ const result=await providers.refreshInstagramIdentity(owner,accountId);assert(result.updated);let a=row('SELECT * FROM accounts WHERE id=?',accountId);assert.equal(a.username,'new.name');assert.equal(a.display_name,'Nome atualizado');assert.equal(a.biography,'Minha bio\nSegunda linha');assert.equal(a.group_id,group);assert.equal(a.cover_media_id,coverId);assert.equal(a.tokens,ciphertext);assert.equal(a.state,'connected');assert.equal(a.profile_picture_url,'https://scontent.cdninstagram.com/profile.jpg?size=150');assert.equal(a.profile_sync_status,'ok');assert(a.profile_attempt_at>0);assert(a.profile_checked_at>0);assert.equal((await server.state(owner,'QA')).accounts[0].profilePictureUrl,a.profile_picture_url);
+ globalThis.fetch=async()=>Response.json({user_id:'123456789',username:'new.name'});const empty=await providers.refreshInstagramIdentity(owner,accountId);assert.equal(row('SELECT biography FROM accounts WHERE id=?',accountId).biography,'Minha bio\nSegunda linha');assert.equal(empty.status,'no_photo');assert.equal(empty.photoUpdated,false);assert.equal(row('SELECT profile_sync_status FROM accounts WHERE id=?',accountId).profile_sync_status,'no_photo');assert.equal(row('SELECT profile_picture_url FROM accounts WHERE id=?',accountId).profile_picture_url,a.profile_picture_url);
  await assert.rejects(()=>providers.refreshInstagramIdentity('another-owner',accountId));
  globalThis.fetch=async()=>Response.json({user_id:'999',username:'wrong.profile'});await assert.rejects(()=>providers.refreshInstagramIdentity(owner,accountId));assert.equal(row('SELECT username FROM accounts WHERE id=?',accountId).username,'new.name');
- globalThis.fetch=async()=>Response.json({error:{code:190,message:'Expired'}},{status:400});await assert.rejects(()=>providers.refreshInstagramIdentity(owner,accountId));assert.equal(row('SELECT state FROM accounts WHERE id=?',accountId).state,'connected');
+ globalThis.fetch=async()=>Response.json({error:{code:190,message:'Expired'}},{status:400});await assert.rejects(()=>providers.refreshInstagramIdentity(owner,accountId));assert.equal(row('SELECT state FROM accounts WHERE id=?',accountId).state,'connected');assert.equal(row('SELECT profile_sync_status FROM accounts WHERE id=?',accountId).profile_sync_status,'authorization_required');assert.equal(row('SELECT tokens FROM accounts WHERE id=?',accountId).tokens,ciphertext);assert.equal(row('SELECT profile_picture_url FROM accounts WHERE id=?',accountId).profile_picture_url,a.profile_picture_url);
+ globalThis.fetch=async()=>Response.json({error:{code:200,message:'Missing permission to read profile'}},{status:403});await assert.rejects(()=>providers.refreshInstagramIdentity(owner,accountId));const denied=row('SELECT * FROM accounts WHERE id=?',accountId);assert.equal(denied.profile_sync_status,'permission_required');assert.equal(denied.state,'connected');assert.equal(denied.tokens,ciphertext);assert.equal(denied.profile_picture_url,a.profile_picture_url);assert.equal(denied.biography,a.biography);
+ globalThis.fetch=async()=>Response.json({error:{code:2,message:'Temporary'}},{status:503});await assert.rejects(()=>providers.refreshInstagramIdentity(owner,accountId));assert.equal(row('SELECT profile_sync_status FROM accounts WHERE id=?',accountId).profile_sync_status,'temporary');
+ globalThis.fetch=async()=>Response.json({user_id:'123456789',username:'new.name',name:'Nome atualizado',biography:'Minha bio\nSegunda linha',profile_picture_url:a.profile_picture_url});const recovered=await providers.refreshInstagramIdentity(owner,accountId);assert.equal(recovered.photoUpdated,true);assert.equal(row('SELECT profile_sync_status FROM accounts WHERE id=?',accountId).profile_sync_status,'ok');
+ globalThis.fetch=async()=>Response.json({user_id:'123456789',username:'new.name',biography:''});await providers.refreshInstagramIdentity(owner,accountId);assert.equal(row('SELECT biography FROM accounts WHERE id=?',accountId).biography,'');
  const route=await mod('app/api/accounts/refresh/route');globalThis.testUser=null;assert.equal((await route.POST(new Request('https://firma.test/api/accounts/refresh',{method:'POST',headers:{Origin:'https://firma.test','Content-Type':'application/json'},body:JSON.stringify({accountId})}))).status,401);
  }finally{globalThis.fetch=previousFetch;globalThis.testUser=userA;}
 });
+await check('Incremental account import preserves existing connections, is idempotent and validates before writing',async()=>{
+ const {importAccounts}=await mod('lib/import-accounts');
+ const g={kind:'firma-migration-v1',mode:'import',owner:'incremental-owner',expires:Date.now()+60000,nonce:security.id()};
+ const a={platform:'instagram',provider_id:'123456789',username:'new-profile',display_name:'New',tokens:{access_token:'test-import-token'},expires_at:null,scopes:'instagram_business_basic',state:'connected',created_at:Date.now()};
+ const backup={format:'firma-portable-v1',data:{accounts:[a]}};
+ assert.deepEqual(await importAccounts(g,backup),{ok:true,imported:1,skipped:0});
+ const stored=row('SELECT * FROM accounts WHERE owner=?',g.owner);
+ assert.notEqual(stored.tokens,JSON.stringify(a.tokens));assert.deepEqual(await security.unseal(stored.tokens,testEnv.TOKEN_ENCRYPTION_KEY),a.tokens);assert.equal(stored.group_id,null);assert.equal(stored.cover_media_id,null);
+ a.username='changed';a.tokens.access_token='replacement';assert.deepEqual(await importAccounts(g,backup),{ok:true,imported:0,skipped:1});assert.deepEqual(row('SELECT * FROM accounts WHERE owner=?',g.owner),stored);
+ const before=row('SELECT count(*) n FROM accounts').n;
+ await assert.rejects(()=>importAccounts(g,{format:'firma-portable-v1',data:{accounts:[{...a,provider_id:'987654321'},{...a,tokens:null}]}}));assert.equal(row('SELECT count(*) n FROM accounts').n,before);
+ await assert.rejects(()=>importAccounts({...g,mode:'export'},backup));
+ assert.deepEqual(await importAccounts({...g,owner:'other-incremental-owner'},backup),{ok:true,imported:1,skipped:0});assert.deepEqual(row('SELECT * FROM accounts WHERE owner=?',g.owner),stored);
+});
+
+await check('Profile photos accept only HTTPS Meta images and reject token-bearing or unsafe URLs',async()=>{
+ const {profilePhotoUrl}=await mod('lib/profile-photo');
+ for(const url of ['https://scontent.cdninstagram.com/photo.jpg','https://scontent-gru.fbcdn.net/photo.jpg?oh=signed'])assert.equal(profilePhotoUrl(url),url);
+ for(const url of [null,'http://scontent.cdninstagram.com/p.jpg','https://cdninstagram.com.evil.test/p.jpg','https://evil.test/p.jpg','https://user:pass@scontent.cdninstagram.com/p.jpg','https://scontent.cdninstagram.com:444/p.jpg','https://scontent.cdninstagram.com/p.jpg?access_token=secret','data:image/png;base64,AA'])assert.equal(profilePhotoUrl(url),null);
+});
+await check('Daily Stories require explicit approval, create all selected deliveries atomically, and never duplicate a day',async()=>{
+ const daily=await mod('lib/daily-stories'),owner='daily-stories-qa',clock=Date.now,oldSettings={...testEnv},oldUser=globalThis.testUser;
+ const now=Date.parse('2026-11-12T10:00:00Z');Date.now=()=>now;
+ try{
+  Object.assign(testEnv,{SCHEDULER_ENABLED:'true',RUNNER_OWNER_ID:owner,RUNNER_SERVICE_TOKEN_SHA256:'A'.repeat(43)});await server.workspace(owner);
+  const mediaId=security.id(),aids=Array.from({length:41},()=>security.id());
+  run("INSERT INTO media(id,owner,name,mime,size,storage_key,folder,created_at) VALUES (?,?,?,?,?,?,?,?)",mediaId,owner,'daily.jpg','image/jpeg',100,'daily-test-image','Geral',now);
+  for(const [i,aid] of aids.entries())run("INSERT INTO accounts(id,owner,platform,provider_id,username,display_name,tokens,expires_at,scopes,state,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",aid,owner,'instagram',String(900000+i),'daily_'+i,'Daily '+i,await security.seal({access_token:'FAKE-DAILY'},testEnv.TOKEN_ENCRYPTION_KEY),now+864000000,'basic','connected',now);
+  run('INSERT INTO provider_configs(id,owner,platform,encrypted,updated_at) VALUES (?,?,?,?,?)',security.id(),owner,'instagram',await security.seal({clientId:'fake',clientSecret:'fake'},testEnv.TOKEN_ENCRYPTION_KEY),now);
+  const data={id:security.id(),mode:'daily_story',name:'Daily Story',time:'12:00',startsOn:'2026-11-12',mediaIds:[mediaId],accountIds:aids,approved:true};
+  await assert.rejects(()=>daily.dailyStoryAction('rule.save',{...data,approved:false},owner,null));
+  await assert.rejects(()=>daily.dailyStoryAction('rule.save',{...data,mediaIds:[]},owner,null));
+  await assert.rejects(()=>daily.dailyStoryAction('rule.save',{...data,accountIds:[security.id()]},owner,null));
+  await assert.rejects(()=>daily.dailyStoryAction('rule.save',{...data,startsOn:'2026-02-30'},owner,null));
+  assert.equal(row('SELECT count(*) n FROM rules WHERE owner=?',owner).n,0);
+  const saved=await daily.dailyStoryAction('rule.save',data,owner,null),rid=saved.id;assert.equal((await daily.dailyStoryAction('rule.save',data,owner,null)).id,rid);assert.equal(row('SELECT count(*) n FROM rules WHERE owner=?',owner).n,1);
+  const posts=db.prepare('SELECT * FROM posts WHERE owner=? ORDER BY scheduled_at').all(owner);assert.equal(posts.length,2);
+  assert.equal(posts[0].scheduled_at,Date.parse('2026-11-12T15:00:00Z'));assert.equal(posts[0].format,'story');assert.equal(posts[0].status,'scheduled');assert.deepEqual(JSON.parse(posts[0].media_ids),[mediaId]);
+  assert.equal(row('SELECT count(*) n FROM deliveries WHERE owner=?',owner).n,82);
+  await Promise.all([daily.generateDailyStories(owner),daily.generateDailyStories(owner)]);assert.equal(row('SELECT count(*) n FROM posts WHERE owner=?',owner).n,2);assert.equal(row('SELECT count(*) n FROM deliveries WHERE owner=?',owner).n,82);
+  const beforeCalls=requests.length;assert.equal((await queue.processQueue(owner)).processed,0);assert.equal(requests.length,beforeCalls);
+  await daily.dailyStoryAction('rule.toggle',{id:rid,active:false},owner,null);
+  run('UPDATE deliveries SET next_run=0 WHERE owner=?',owner);Date.now=()=>Date.parse('2026-11-12T16:00:00Z');
+  assert.equal((await queue.processQueue(owner)).processed,0);assert.equal(requests.length,beforeCalls);
+  await daily.dailyStoryAction('rule.toggle',{id:rid,active:true},owner,null);
+  assert.equal(row('SELECT status FROM posts WHERE id=?',posts[0].id).status,'cancelled');
+  assert.equal(row('SELECT status FROM posts WHERE id=?',posts[1].id).status,'scheduled');
+  // An uncertain prior send blocks a new occurrence only on that profile.
+  run("UPDATE posts SET status='uncertain' WHERE id=?",posts[0].id);run("UPDATE deliveries SET status='uncertain' WHERE post_id=? AND account_id=?",posts[0].id,aids[0]);
+  assert.equal(row("SELECT count(*) n FROM deliveries d JOIN posts p ON p.id=d.post_id WHERE d.post_id=? AND "+daily.recurringReady('d','p'),posts[1].id).n,40);
+  Date.now=()=>Date.parse('2026-11-16T10:00:00Z');await daily.generateDailyStories(owner);
+  const days=db.prepare('SELECT recurrence_key FROM posts WHERE owner=?').all(owner).map(p=>p.recurrence_key.slice(-10));assert(days.includes('2026-11-16'));assert(days.includes('2026-11-17'));assert(!days.includes('2026-11-14'));assert(!days.includes('2026-11-15'));
+  await daily.dailyStoryAction('rule.delete',{id:rid},owner,null);assert.equal(row('SELECT count(*) n FROM rules WHERE id=?',rid).n,0);assert.equal(row("SELECT count(*) n FROM deliveries WHERE owner=? AND status='pending'",owner).n,0);assert.equal(row("SELECT status FROM deliveries WHERE owner=? AND status='uncertain'",owner).status,'uncertain');
+ }finally{Date.now=clock;for(const k of Object.keys(testEnv))if(!(k in oldSettings))delete testEnv[k];Object.assign(testEnv,oldSettings);globalThis.testUser=oldUser;}
+});
+
+await check('An approved daily occurrence publishes as an Instagram Story through existing checkpoints, once only',async()=>{
+ const daily=await mod('lib/daily-stories'),owner='daily-stories-qa',clock=Date.now,oldFetch=globalThis.fetch,settings={...testEnv};let now=Date.parse('2026-11-18T10:00:00Z');Date.now=()=>now;
+ try{
+  Object.assign(testEnv,{SCHEDULER_ENABLED:'true',RUNNER_OWNER_ID:owner,RUNNER_SERVICE_TOKEN_SHA256:'A'.repeat(43)});
+  const accountId=row('SELECT id FROM accounts WHERE owner=? LIMIT 1',owner).id,mediaId=row('SELECT id FROM media WHERE owner=? LIMIT 1',owner).id;
+  const result=await daily.dailyStoryAction('rule.save',{mode:'daily_story',name:'Pipeline Story',time:'12:00',startsOn:'2026-11-18',mediaIds:[mediaId],accountIds:[accountId],approved:true},owner,null);
+  const pid=row('SELECT id FROM posts WHERE recurrence_key=?',result.id+':2026-11-18').id;let containers=0,published=0;
+  globalThis.fetch=async(url,init={})=>{assert.equal(new URL(url).hostname,'graph.instagram.com');if(String(url).endsWith('/media_publish')){published++;return Response.json({id:'daily-published'});}if(String(url).endsWith('/media')){assert.equal(init.body.get('media_type'),'STORIES');assert(init.body.get('image_url').startsWith('https://firma.test/api/publish-media/'));containers++;return Response.json({id:'daily-container'});}return Response.json({status_code:'FINISHED'});};
+  now=Date.parse('2026-11-18T15:00:00Z');await queue.processQueue(owner);assert.equal(row('SELECT status FROM posts WHERE id=?',pid).status,'published');assert.equal(containers,1);assert.equal(published,1);
+  await queue.processQueue(owner);assert.equal(containers,1);assert.equal(published,1);
+  await daily.dailyStoryAction('rule.delete',{id:result.id},owner,null);
+ }finally{Date.now=clock;globalThis.fetch=oldFetch;Object.assign(testEnv,settings);}
+});
+
+
+await check('Profile photos stay owner-scoped, reject redirects and retain the last usable image',async()=>{
+ const photo=await mod('app/api/accounts/[id]/photo/route'),oldFetch=globalThis.fetch,id=security.id();
+ run("INSERT INTO accounts(id,owner,platform,provider_id,username,display_name,tokens,scopes,state,created_at,profile_picture_url) VALUES(?,?,'instagram',?,'photo','Photo','test-ciphertext','basic','connected',?,'https://scontent.cdninstagram.com/photo.jpg')",id,userA.userId,id,Date.now());
+ const get=()=>photo.GET(new Request('https://firma.test/api/accounts/'+id+'/photo'),{params:Promise.resolve({id})});
+ try{
+  let calls=0;globalThis.fetch=async(url,init)=>{calls++;assert.equal(String(url),'https://scontent.cdninstagram.com/photo.jpg');assert.equal(init.redirect,'manual');assert.equal(init.headers,undefined);return new Response(new Uint8Array([255,216,255,217]),{headers:{'Content-Type':'image/jpeg'}});};
+  globalThis.testUser=userB;assert.equal((await get()).status,404);assert.equal(calls,0);
+  globalThis.testUser=userA;const ok=await get();assert.equal(ok.status,200);assert.equal(ok.headers.get('Content-Type'),'image/jpeg');assert.equal((await ok.arrayBuffer()).byteLength,4);
+  globalThis.fetch=async()=>new Response(null,{status:302,headers:{Location:'https://attacker.invalid/private'}});const fallback=await get();assert.equal(fallback.status,200);assert.equal((await fallback.arrayBuffer()).byteLength,4);
+  run('UPDATE accounts SET profile_picture_url=? WHERE id=?','https://attacker.invalid/image.jpg',id);globalThis.fetch=async()=>{throw new Error('Must not fetch untrusted URL');};assert.equal((await get()).status,200);
+  globalThis.testUser=null;assert.equal((await get()).status,401);
+ }finally{globalThis.testUser=userA;globalThis.fetch=oldFetch;}
+});
+
+
+await check('Confirmed temporary Instagram blocks resume automatically without duplicating containers or confirmed posts',async()=>{
+ const oldFetch=globalThis.fetch,clock=Date.now;let now=clock(),blocked=true,created=0,publishes=0;
+ testEnv.SCHEDULER_ENABLED='true';testEnv.RUNNER_OWNER_ID=userA.userId;testEnv.RUNNER_SERVICE_TOKEN_SHA256='A'.repeat(43);
+ run("UPDATE deliveries SET status='cancelled' WHERE status IN ('pending','processing','working')");
+ Date.now=()=>now;
+ try{
+  const id=await scheduled();
+  globalThis.fetch=async(url,init={})=>{
+   if(String(url).includes('/media_publish')){publishes++;return blocked?Response.json({error:{code:368,message:'Temporarily blocked'}},{status:400}):Response.json({id:'released-post'});}
+   if(String(url).endsWith('/media')){created++;return Response.json({id:'stable-blocked-container'});}
+   return Response.json({status_code:'FINISHED'});
+  };
+  await queue.processQueue(userA.userId,'manual',id);
+  assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',id).status,'processing');assert.equal(created,1);assert.equal(publishes,1);
+  await queue.processQueue(userA.userId,'manual',id);assert.equal(publishes,1);
+  blocked=false;now+=3600001;await queue.processQueue(userA.userId,'manual',id);
+  assert.equal(row('SELECT status FROM posts WHERE id=?',id).status,'published');assert.equal(created,1);assert.equal(publishes,2);
+  await queue.processQueue(userA.userId,'manual',id);assert.equal(publishes,2);
+ }finally{globalThis.fetch=oldFetch;Date.now=clock;}
+});
+
+await check('Public verification is owner-scoped, preserves connections and clears red only after a confirmed recovery',async()=>{
+ const oldFetch=globalThis.fetch,oldUser=globalThis.testUser;globalThis.testUser=userA;
+ const verification=await mod('app/api/accounts/verify/route'),availability=await mod('lib/profile-availability');
+ const accountId=security.id();run('INSERT INTO accounts (id,owner,platform,provider_id,username,display_name,tokens,scopes,state,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',accountId,userA.userId,'instagram',accountId,'check.profile','Check','opaque-test-token','basic','connected',Date.now());
+ const req=(origin='https://firma.test')=>new Request('https://firma.test/api/accounts/verify',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({accountId})});
+ let calls=0,html='<h2>Esta página não está disponível.</h2>';
+ globalThis.fetch=async(url,init)=>{calls++;assert(['https://www.instagram.com/check.profile/reels/?hl=en','https://www.instagram.com/check.profile/?hl=en'].includes(url));assert.equal(init.redirect,'manual');assert(init.headers['User-Agent'].includes('FirmaSocialProfileCheck/1.0'));assert(init.headers['User-Agent'].includes('Chrome/'));assert(!Object.keys(init.headers).some(h=>/authorization|cookie/i.test(h)));return new Response(html,{headers:{'content-type':'text/html'}});};
+ try{
+  const listed=await(await verification.GET(new Request('https://firma.test/api/accounts/verify'))).json();assert(listed.accounts.some(a=>a.id===accountId));assert(!JSON.stringify(listed).includes('opaque-test-token'));
+  assert.equal((await verification.POST(req('https://attacker.invalid'))).status,403);assert.equal(calls,0);
+  globalThis.testUser=userB;assert.equal((await verification.POST(req())).status,404);assert.equal(calls,0);globalThis.testUser=userA;
+  const firstResponse=await verification.POST(req());assert.equal(firstResponse.status,200);assert.equal((await firstResponse.json()).availabilityStatus,'unavailable');
+  assert.equal((await verification.POST(req())).status,429);assert.equal(calls,2);
+  assert.equal(row('SELECT state,tokens FROM accounts WHERE id=?',accountId).state,'connected');assert.equal(row('SELECT tokens FROM accounts WHERE id=?',accountId).tokens,'opaque-test-token');
+  run('UPDATE accounts SET availability_attempt_at=0 WHERE id=?',accountId);html='<h1>Log in to Instagram</h1>';
+  const inconclusive=await(await verification.POST(req())).json();assert.equal(inconclusive.availabilityResult,'unknown');assert.equal(inconclusive.availabilityStatus,'unavailable');
+  run('UPDATE accounts SET availability_attempt_at=0 WHERE id=?',accountId);html='<meta property="og:title" content="Check (@check.profile)"><meta property="og:url" content="https://www.instagram.com/check.profile/">';
+  const recovered=await(await verification.POST(req())).json();assert.equal(recovered.availabilityStatus,'available');assert.equal(recovered.availabilityReason,'reels_accessible');
+  const repair=await mod('lib/profile-verification');run("UPDATE accounts SET availability_status='needs_review',availability_result='needs_review',availability_reason='unexpected_redirect' WHERE id=?",accountId);assert.equal((await repair.repairLegacyVerificationFlags(userA.userId)).cleared,1);assert.equal(row('SELECT availability_status s FROM accounts WHERE id=?',accountId).s,null);assert.equal(row('SELECT state FROM accounts WHERE id=?',accountId).state,'connected');assert.equal((await repair.repairLegacyVerificationFlags(userA.userId)).cleared,0);
+  run("UPDATE accounts SET username='changed.profile' WHERE id=?",accountId);
+  const changed=await server.state(userA.userId,'A');assert(!availability.profileIsRed(changed.accounts.find(a=>a.id===accountId)));
+ }finally{globalThis.fetch=oldFetch;globalThis.testUser=oldUser;run('DELETE FROM accounts WHERE id=?',accountId);}
+});
+
 console.log(`\n${total} meaningful integration checks passed. Platform calls were mocked.`);
 db.close();fs.rmSync(out,{recursive:true,force:true});
 
