@@ -1,3 +1,5 @@
+import {updateRule} from '@/lib/rule-update';
+import {folderReelAction} from '@/lib/folder-reels';
 import {groupScope,requireItems} from '@/lib/group-scope';
 import {editingAction,assetRows,accountRows,prepareOptions} from '@/lib/editing';
 import {processQueue,resumeInstagramPost} from '@/lib/queue';
@@ -18,7 +20,7 @@ export async function POST(request:Request){try{
  if(['provider.save','account.disconnect','workspace.save'].includes(action))await protectedUser();
  const group=await groupScope(owner,body.groupId);
  if(['account.geo','account.preferences','group.create','group.assign','post.batch','post.sharedReelBatch','post.prepareSharedReelBatch','media.move','media.remove'].includes(action))await protectedUser();
- if(group){const tab:Record<string,any>={'post':'posts','rule':'rules','media':'media','template':'templates','account':'accounts'};const t=action.startsWith('reference.')?(action.includes('.model.')?'reference_models':'reference_profiles'):tab[action.split('.')[0]];if(t&&data.id&&!(action==='post.publishNow'&&data.version===undefined))await requireItems(owner,group,t,[data.id]);if(data.referenceId)await requireItems(owner,group,'reference_profiles',[data.referenceId]);}
+ if(group){const tab:Record<string,any>={'post':'posts','rule':'rules','media':'media','template':'templates','account':'accounts'};const t=action.startsWith('reference.')?(action.includes('.model.')?'reference_models':'reference_profiles'):tab[action.split('.')[0]];if(t&&data.id&&!(action==='post.publishNow'&&data.version===undefined)&&action!=='rule.save')await requireItems(owner,group,t,[data.id]);if(data.referenceId)await requireItems(owner,group,'reference_profiles',[data.referenceId]);}
  if(['group.create','group.assign','account.preferences','account.geo','media.move','media.remove','media.delete','post.batch','post.sharedReelBatch','post.prepareSharedReelBatch'].includes(action))return Response.json(await editingAction(action,data,owner,group));
  if(action.startsWith('reference.'))return Response.json(await referenceAction(action,data,owner,group));
  if(action==='post.resumeInstagram'){await protectedUser();return Response.json(await resumeInstagramPost(owner,z.string().uuid().parse(data.id)));}
@@ -115,10 +117,13 @@ export async function POST(request:Request){try{
   const v=z.object({name:z.string().trim().min(1).max(80),caption:z.string().trim().min(1).max(5000)}).parse(data);await run('INSERT INTO templates (id,owner,name,caption,created_at,group_id) VALUES (?,?,?,?,?,?)',id(),owner,v.name,v.caption,now,group);return Response.json({ok:true});
  }
  if(action==='template.delete'){await run('DELETE FROM templates WHERE id=? AND owner=?',z.string().uuid().parse(data.id),owner);return Response.json({ok:true});}
- if(action==='rule.save'&&data.mode==='daily_story'||['rule.toggle','rule.delete'].includes(action)){await protectedUser();const result=await dailyStoryAction(action,data,owner,group);if(result)return Response.json(result);}
- if(action==='rule.save'){
-  const v=z.object({name:z.string().trim().min(1).max(80),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),weekdays:z.array(z.number().int().min(0).max(6)).min(1),caption:z.string().max(5000),accountIds:z.array(z.string().uuid()).max(40).default([]),mediaIds:z.array(z.string().uuid()).max(100).default([])}).parse(data);
+ if(['rule.save','rule.update'].includes(action)&&data.mode==='folder_reel'||['rule.toggle','rule.delete'].includes(action)){await protectedUser();const result=await folderReelAction(action,data,owner,group);if(result)return Response.json(result);}
+ if(['rule.save','rule.update'].includes(action)&&data.mode==='daily_story'||['rule.toggle','rule.delete'].includes(action)){await protectedUser();const result=await dailyStoryAction(action,data,owner,group);if(result)return Response.json(result);}
+ if(action==='rule.save'||action==='rule.update'){
+  await protectedUser();
+  const v=z.object({name:z.string().trim().min(1).max(80),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),weekdays:z.array(z.number().int().min(0).max(6)).min(1),caption:z.string().max(5000),accountIds:z.array(z.string().uuid()).max(100).default([]),mediaIds:z.array(z.string().uuid()).max(100).default([])}).parse(data);
   await requireItems(owner,group,'media',v.mediaIds);await requireItems(owner,group,'accounts',v.accountIds);const mids=await list('SELECT id FROM media WHERE owner=?',owner);if(v.mediaIds.some(x=>!mids.find(m=>m.id===x)))throw new AppError('Mídia inválida.');const aids=await list('SELECT id FROM accounts WHERE owner=?',owner);if(v.accountIds.some(x=>!aids.find(a=>a.id===x)))throw new AppError('Conta inválida.');
+  if(action==='rule.update'){const rid=z.string().uuid().parse(data.id),prior=await first("SELECT * FROM rules WHERE id=? AND owner=? AND mode='draft'",rid,owner);if(!prior)throw new AppError('Rotina não encontrada.',404);await requireItems(owner,group,'rules',[rid]);await updateRule(prior,data.expected,{name:v.name,time:v.time,weekdays:JSON.stringify(v.weekdays),account_ids:JSON.stringify([...new Set(v.accountIds)]),media_ids:JSON.stringify(v.mediaIds),caption:v.caption,starts_on:prior.starts_on});return Response.json({ok:true,id:rid});}
   await run('INSERT INTO rules (id,owner,name,time,weekdays,account_ids,media_ids,caption,active,created_at,group_id) VALUES (?,?,?,?,?,?,?,?,1,?,?)',id(),owner,v.name,v.time,JSON.stringify(v.weekdays),JSON.stringify(v.accountIds),JSON.stringify(v.mediaIds),v.caption,now,group);await event(owner,'Rotina criada',v.name+' · gera rascunhos para revisão.');return Response.json({ok:true});
  }
  if(action==='rule.toggle'){const v=z.object({id:z.string().uuid(),active:z.boolean()}).parse(data);await run('UPDATE rules SET active=? WHERE id=? AND owner=?',v.active?1:0,v.id,owner);return Response.json({ok:true});}

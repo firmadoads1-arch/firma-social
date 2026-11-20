@@ -1,3 +1,4 @@
+import {folderReelPlanning,folderReelStatus} from '@/lib/folder-reels';
 import {getWorkspaceUser} from '@/lib/workspace-access';
 import {responseError,first} from '@/lib/server';
 import {assertSameOrigin} from '@/lib/security';
@@ -16,4 +17,6 @@ export async function GET(req:Request){try{const user=req.headers.get('x-firma-s
  CASE WHEN p.batch_id IS NOT NULL THEN ${earlierBatchPending('p')} ELSE 0 END AS blocked
  FROM deliveries d JOIN posts p ON p.id=d.post_id AND p.owner=d.owner WHERE d.owner=? AND d.status IN ('pending','processing','working') AND p.status IN ('scheduled','publishing') AND ${recurringReady('d','p')})
  SELECT SUM(status='pending') pending,SUM(status='processing') processing,SUM(status='working') working,MIN(CASE WHEN NOT blocked THEN eligible END) nextCheckAt,SUM(CASE WHEN batch_id IS NOT NULL AND NOT blocked AND eligible<=? THEN 1 ELSE 0 END) batchSoon FROM work`,owner,Date.now()+61000);
- return Response.json({lastRun,queue},{headers:{'Cache-Control':'no-store'}});}catch(e){return responseError(e);}}
+ const planning=await folderReelPlanning(owner);if(planning){queue.pending=(queue.pending??0)+planning;queue.planning=planning;queue.nextCheckAt=Math.min(queue.nextCheckAt??Date.now(),Date.now());}
+ const routines=params.get('routines')==='1'?await folderReelStatus(owner):undefined;
+ return Response.json({lastRun,queue,...(routines?{routines}:{})},{headers:{'Cache-Control':'no-store'}});}catch(e){return responseError(e);}}

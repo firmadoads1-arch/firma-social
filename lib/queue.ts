@@ -1,3 +1,4 @@
+import {generateFolderReels} from './folder-reels';
 import {coverForDelivery,publishCaption,defaultLocation} from './editor-defaults';
 import {instagramMediaURL} from './media-delivery';
 import {list,first,run,database,config,bucket,event,runtime,postRow} from './server';
@@ -67,7 +68,7 @@ async function generateDrafts(owner?:string){const rules=await list("SELECT * FR
  for(const r of rules){const ws=await first('SELECT timezone FROM workspaces WHERE owner=?',r.owner);if(!ws)continue;const date=nextLocalDate(Date.now(),ws.timezone);if(r.last_date?.slice(0,10)===date)continue;let time:number|null=null;try{time=localToEpoch(date+'T'+r.time,ws.timezone);}catch{/* Keep the draft unscheduled when the local time does not exist. */}const weekday=new Date(date+'T12:00:00Z').getUTCDay();if(!JSON.parse(r.weekdays).includes(weekday))continue;
   const aids=JSON.parse(r.account_ids);const accts=await list('SELECT id,platform FROM accounts WHERE owner=?',r.owner);const networks=[...new Set(accts.filter(a=>aids.includes(a.id)).map(a=>a.platform))];const mids=JSON.parse(r.media_ids);const available=await list('SELECT id,mime FROM media WHERE owner=?',r.owner);const choices=available.filter(m=>mids.includes(m.id));const selected=choices.length?choices[Math.floor(Date.parse(date+'T12:00:00Z')/86400000)%choices.length]:null;const pid=id();const n=Date.now();
   // Claim date and insert in a single D1 transaction. The stable claim marker is the post ID.
-  const claim=date+':'+pid;await database().batch([database().prepare('UPDATE rules SET last_date=? WHERE id=? AND active=1 AND (last_date IS NULL OR substr(last_date,1,10)<>?)').bind(claim,r.id,date),database().prepare("INSERT INTO posts (id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM rules WHERE id=? AND last_date=?)").bind(pid,r.owner,r.name,r.caption,'{}',JSON.stringify(networks.length?networks:['instagram']),JSON.stringify(aids),JSON.stringify(selected?[selected.id]:[]),selected?.mime.startsWith('image/')?'photo':'video','draft',time,JSON.stringify({locationMode:'none',coverMode:'account'}),1,n,n,r.group_id??null,r.id,claim)]);const created=await first('SELECT id FROM posts WHERE id=?',pid);if(created){generated++;await event(r.owner,'Rascunho criado pela rotina',r.name+(time===null?' · Escolha outro horário: o horário sugerido não existe neste fuso.':''),pid);}
+  const claim=date+':'+pid;await database().batch([database().prepare('UPDATE rules SET last_date=? WHERE id=? AND active=1 AND approved_at IS ? AND (last_date IS NULL OR substr(last_date,1,10)<>?)').bind(claim,r.id,r.approved_at,date),database().prepare("INSERT INTO posts (id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM rules WHERE id=? AND last_date=?)").bind(pid,r.owner,r.name,r.caption,'{}',JSON.stringify(networks.length?networks:['instagram']),JSON.stringify(aids),JSON.stringify(selected?[selected.id]:[]),selected?.mime.startsWith('image/')?'photo':'video','draft',time,JSON.stringify({locationMode:'none',coverMode:'account'}),1,n,n,r.group_id??null,r.id,claim)]);const created=await first('SELECT id FROM posts WHERE id=?',pid);if(created){generated++;await event(r.owner,'Rascunho criado pela rotina',r.name+(time===null?' · Escolha outro horário: o horário sugerido não existe neste fuso.':''),pid);}
  }return generated;
 }
 export const earlierBatchPending=(b:string)=>`EXISTS (
@@ -103,7 +104,7 @@ export async function resumeInstagramPost(owner:string,postId:string){
 
 export async function processQueue(owner:string,source:'manual'|'service'='manual',postId?:string,platform?:'instagram'){
  if(!owner)throw new AppError('Workspace da fila não configurado.',403);
- const startedAt=Date.now();const drafted=postId?0:await generateDrafts(owner);if(!postId)await generateDailyStories(owner);
+ const startedAt=Date.now();const drafted=postId?0:await generateDrafts(owner);if(!postId){await generateDailyStories(owner);await generateFolderReels(owner);}
  const scope=' AND owner=?'+(postId?' AND post_id=?':'')+(platform?' AND platform=?':'');
  const params=[owner,...(postId?[postId]:[]),...(platform?[platform]:[])];
  const stale=await list("SELECT * FROM deliveries WHERE status='working' AND lease_until<=?"+scope,startedAt,...params);
@@ -123,5 +124,5 @@ export async function processQueue(owner:string,source:'manual'|'service'='manua
    if(!retry)await event(d.owner,'Publicação requer atenção',msg,d.post_id);
   }
   await summarize(d.post_id,d.owner);processed++;
- }const checkedAt=new Date().toISOString();await run('INSERT INTO runner_status (owner,checked_at,processed,drafted) VALUES (?,?,?,?) ON CONFLICT(owner) DO UPDATE SET checked_at=excluded.checked_at,processed=excluded.processed,drafted=excluded.drafted',source==='service'?'service:'+owner:owner,checkedAt,processed,drafted);return {processed,drafted,checkedAt};
+ }if(!postId)await generateFolderReels(owner);const checkedAt=new Date().toISOString();await run('INSERT INTO runner_status (owner,checked_at,processed,drafted) VALUES (?,?,?,?) ON CONFLICT(owner) DO UPDATE SET checked_at=excluded.checked_at,processed=excluded.processed,drafted=excluded.drafted',source==='service'?'service:'+owner:owner,checkedAt,processed,drafted);return {processed,drafted,checkedAt};
 }

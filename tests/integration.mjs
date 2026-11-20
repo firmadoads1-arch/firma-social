@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 import ts from 'typescript';
 const root=process.cwd(),out=fs.mkdtempSync(path.join(tmpdir(),'firma-check-'));
 fs.symlinkSync(path.join(root,'node_modules'),path.join(out,'node_modules'),'dir');
-const files=['lib/profile-availability.ts','lib/profile-verification.ts','app/api/accounts/verify/route.ts','lib/profile-image.ts','app/api/accounts/[id]/photo/route.ts','lib/daily-stories.ts','lib/profile-photo.ts','lib/import-accounts.ts','lib/prisma/catalog.ts','lib/prisma/shared-reel.ts','lib/prisma/store.ts','lib/prisma/security.ts','lib/prisma/template-api.ts','lib/prisma/profile-types.ts','app/api/accounts/refresh/route.ts','lib/editor-defaults.ts','lib/group-scope.ts','lib/editing.ts','lib/workspace-access.ts','lib/story-links.ts','lib/analytics.ts','lib/analytics-model.ts','app/api/analytics/route.ts','lib/publishing-limits.ts','lib/scheduler.ts','lib/runner-auth.ts','lib/media-delivery.ts','app/api/publish-media/[token]/route.ts','lib/migration.ts','lib/access-identity.ts','app/api/migration/route.ts','lib/connection-links.ts','app/api/connection-links/[platform]/route.ts','app/api/connect/route.ts','app/connect/route.ts','lib/domain.ts','lib/oauth.ts','lib/connections.ts','app/api/oauth/result/route.ts','lib/references.ts','lib/reference-store.ts','lib/security.ts','lib/providers.ts','lib/provider-errors.ts','lib/server.ts','lib/queue.ts','app/api/app/route.ts','app/api/runner/route.ts','app/api/upload/route.ts','app/api/media/[id]/route.ts','app/api/oauth/[platform]/callback/route.ts','app/api/oauth/[platform]/start/route.ts'];
+const files=['lib/rule-config.ts','lib/rule-update.ts','lib/folder-reels.ts','lib/reel-schedule.ts','lib/profile-availability.ts','lib/profile-verification.ts','app/api/accounts/verify/route.ts','lib/profile-image.ts','app/api/accounts/[id]/photo/route.ts','lib/daily-stories.ts','lib/profile-photo.ts','lib/import-accounts.ts','lib/prisma/catalog.ts','lib/prisma/shared-reel.ts','lib/prisma/store.ts','lib/prisma/security.ts','lib/prisma/template-api.ts','lib/prisma/profile-types.ts','app/api/accounts/refresh/route.ts','lib/editor-defaults.ts','lib/group-scope.ts','lib/editing.ts','lib/workspace-access.ts','lib/story-links.ts','lib/analytics.ts','lib/analytics-model.ts','app/api/analytics/route.ts','lib/publishing-limits.ts','lib/scheduler.ts','lib/runner-auth.ts','lib/media-delivery.ts','app/api/publish-media/[token]/route.ts','lib/migration.ts','lib/access-identity.ts','app/api/migration/route.ts','lib/connection-links.ts','app/api/connection-links/[platform]/route.ts','app/api/connect/route.ts','app/connect/route.ts','lib/domain.ts','lib/oauth.ts','lib/connections.ts','app/api/oauth/result/route.ts','lib/references.ts','lib/reference-store.ts','lib/security.ts','lib/providers.ts','lib/provider-errors.ts','lib/server.ts','lib/queue.ts','app/api/app/route.ts','app/api/runner/route.ts','app/api/upload/route.ts','app/api/media/[id]/route.ts','app/api/oauth/[platform]/callback/route.ts','app/api/oauth/[platform]/start/route.ts'];
 for(const file of files){const dest=path.join(out,file.replace(/\.ts$/,'.mjs'));fs.mkdirSync(path.dirname(dest),{recursive:true});let source=fs.readFileSync(path.join(root,file),'utf8');source=source.replace(/from ['"]([^'"]+)['"]/g,(all,spec)=>{if(spec==='cloudflare:workers')return `from '${pathToFileURL(path.join(out,'env.mjs'))}'`;if(spec==='@/app/chatgpt-auth')return `from '${pathToFileURL(path.join(out,'auth.mjs'))}'`;if(spec.startsWith('@/'))return `from '${pathToFileURL(path.join(out,spec.slice(2)+'.mjs'))}'`;if(spec.startsWith('.'))return `from '${spec}.mjs'`;return all;});fs.writeFileSync(dest,ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);}
 fs.writeFileSync(path.join(out,'env.mjs'),'export const env=globalThis.testEnv;');fs.writeFileSync(path.join(out,'auth.mjs'),'export async function getChatGPTUser(){return globalThis.testUser;}');
 let db=new DatabaseSync(':memory:');for(const file of fs.readdirSync(path.join(root,'drizzle')).filter(f=>f.endsWith('.sql')).sort())db.exec(fs.readFileSync(path.join(root,'drizzle',file),'utf8'));
@@ -31,6 +31,102 @@ const mid=security.id(),aid=security.id();const now=Date.now();run('INSERT INTO 
 run('INSERT INTO accounts (id,owner,platform,provider_id,username,display_name,tokens,expires_at,scopes,state,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',aid,userA.userId,'instagram','remote-a','brand','Brand',await security.seal({access_token:'FAKE-ONLY'},testEnv.TOKEN_ENCRYPTION_KEY),now+1e9,'basic','connected',now);
 await action('provider.save',{platform:'instagram',clientId:'fake-id',clientSecret:'fake-secret'});
 const payload={title:'Original content',caption:'Caption',platforms:['instagram'],accountIds:[aid],mediaIds:[mid],format:'video',status:'scheduled',scheduledAt:Date.now()+300000,options:{}};
+await check('Folder Reels schedules safely, deduplicates and respects pause and uncertain deliveries',async()=>{
+ const folder=await mod('lib/folder-reels'),schedule=await mod('lib/reel-schedule');
+ const c={mode:'interval',minutes:60,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+180000,order:'sequence',folder:'Geral',caption:''};
+ const slots=schedule.reelSlots(c,3,'UTC',c.startsAt,3);assert.equal(slots[1]-slots[0],3600000);
+ assert.equal(schedule.reelSlots({...c,mode:'cycle',minutes:60},3,'UTC',c.startsAt,3)[1]-slots[0],1200000);
+ const shuffled=Array.from({length:10},(_,i)=>schedule.reelIndex(i,10,'shuffle','seed'));assert.equal(new Set(shuffled).size,10);
+ const rid=security.id();const input={...c,id:rid,name:'Folder test',mode:'folder_reel',scheduleMode:'interval',accountIds:[aid],approved:true};
+ await folder.folderReelAction('rule.save',input,userA.userId,null);await folder.folderReelAction('rule.save',input,userA.userId,null);await folder.generateFolderReels(userA.userId,rid);
+ const p=row("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);assert(p);assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid).n,1);assert.equal(JSON.parse(p.media_ids)[0],mid);
+ await folder.folderReelAction('rule.toggle',{id:rid,active:false},userA.userId,null);
+ assert.equal(row(`SELECT count(*) n FROM deliveries d JOIN posts p ON p.id=d.post_id WHERE p.id=? AND ${ (await mod('lib/daily-stories')).recurringReady('d','p')}`,p.id).n,0);
+ await folder.folderReelAction('rule.toggle',{id:rid,active:true},userA.userId,null);
+ assert.equal(row(`SELECT count(*) n FROM deliveries d JOIN posts p ON p.id=d.post_id WHERE p.id=? AND ${ (await mod('lib/daily-stories')).recurringReady('d','p')}`,p.id).n,1);
+ run("UPDATE posts SET status='uncertain' WHERE id=?",p.id);run("UPDATE deliveries SET status='uncertain' WHERE post_id=?",p.id);await folder.generateFolderReels(userA.userId,rid);
+ const next=row("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=? AND id<>?",rid,p.id);assert(next);assert.equal(row(`SELECT count(*) n FROM deliveries d JOIN posts p ON p.id=d.post_id WHERE p.id=? AND ${(await mod('lib/daily-stories')).recurringReady('d','p')}`,next.id).n,0);
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',next.id).status,'cancelled');run('DELETE FROM deliveries WHERE post_id=?',next.id);run('DELETE FROM posts WHERE id=?',next.id);
+ run("UPDATE posts SET status='scheduled' WHERE id=?",p.id);run("UPDATE deliveries SET status='cancelled' WHERE post_id=?",p.id);
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',p.id).status,'cancelled');run('DELETE FROM deliveries WHERE post_id=?',p.id);run('DELETE FROM posts WHERE id=?',p.id);
+});
+
+await check('Editing a folder routine replaces only untouched schedules and all settings',async()=>{
+ const {ruleEditToken}=await mod('lib/rule-config'),folder=await mod('lib/folder-reels');
+ const rid=security.id(),newMedia=security.id(),second=security.id(),baseMedia=row('SELECT * FROM media WHERE id=?',mid),baseAccount=row('SELECT * FROM accounts WHERE id=?',aid);
+ for(const [table,base,overrides] of [['media',baseMedia,{id:newMedia,folder:'Other folder'}],['accounts',baseAccount,{id:second,provider_id:second}]]){const v={...base,...overrides},keys=Object.keys(v);run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,...Object.values(v));}
+ const input={id:rid,name:'Original routine',mode:'folder_reel',scheduleMode:'interval',minutes:60,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+86400000,order:'sequence',folder:'Geral',caption:'old caption',accountIds:[aid],approved:true};
+ const response=await action('rule.save',input);assert.equal(response.status,200,await response.text());
+ const old=row("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid),before=row('SELECT * FROM rules WHERE id=?',rid);
+ const state=await(await route.GET()).json(),clientRule=state.rules.find(r=>r.id===rid);assert.equal(ruleEditToken(clientRule),ruleEditToken(before));
+ const edit={...input,expected:ruleEditToken(clientRule),name:'Edited name',folder:'Other folder',minutes:30,days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+300000,order:'shuffle',caption:'new caption',accountIds:[second]};
+ assert.equal((await action('rule.update',{...edit,approved:false})).status,400);assert.equal(row('SELECT status FROM posts WHERE id=?',old.id).status,'scheduled');
+ const result=await action('rule.update',edit);assert.equal(result.status,200,await result.text());
+ const updated=row('SELECT * FROM rules WHERE id=?',rid),config=JSON.parse(updated.time);assert.equal(updated.id,rid);assert.equal(updated.name,edit.name);assert.equal(updated.active,1);assert.equal(config.folder,edit.folder);assert.equal(config.minutes,30);assert.equal(config.order,'shuffle');assert.deepEqual(JSON.parse(updated.account_ids),[second]);assert.equal(updated.caption,'new caption');assert.equal(updated.created_at,before.created_at);
+ assert.equal(row('SELECT status FROM posts WHERE id=?',old.id).status,'cancelled');assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',old.id).status,'cancelled');
+ const next=row("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=? AND status='scheduled'",rid);assert(next);assert.equal(JSON.parse(next.media_ids)[0],newMedia);assert.deepEqual(JSON.parse(next.account_ids),[second]);assert(next.scheduled_at<old.scheduled_at,'The old cancelled schedule must not postpone the new start');
+ assert.equal((await action('rule.update',edit)).status,409,'Stale save/retry must not apply a second time');assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid).n,2);
+ globalThis.testUser=userB;assert.equal((await action('rule.update',{...edit,expected:ruleEditToken(updated)})).status,404);globalThis.testUser=userA;
+ await folder.folderReelAction('rule.toggle',{id:rid,active:false},userA.userId,null);
+ const paused=row('SELECT * FROM rules WHERE id=?',rid),pausedEdit={...edit,name:'Still paused',expected:ruleEditToken(paused)};
+ assert.equal((await action('rule.update',pausedEdit)).status,200);assert.equal(row('SELECT active FROM rules WHERE id=?',rid).active,0);assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.folderReelRule')=? AND status='scheduled'",rid).n,0);
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);run("DELETE FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);run('DELETE FROM accounts WHERE id=?',second);run('DELETE FROM media WHERE id=?',newMedia);
+});
+await check('Folder edits preserve processing, uncertain and published history, and concurrent edits cannot retire schedules',async()=>{
+ const {ruleEditToken}=await mod('lib/rule-config'),folder=await mod('lib/folder-reels');
+ const rid=security.id(),input={id:rid,name:'Safety',mode:'folder_reel',scheduleMode:'interval',minutes:60,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+300000,order:'sequence',folder:'Geral',caption:'',accountIds:[aid],approved:true};
+ await action('rule.save',input);const post=row("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);
+ let before=row('SELECT * FROM rules WHERE id=?',rid);
+ beforeBatch=()=>run("UPDATE rules SET name='Concurrent change' WHERE id=?",rid);
+ assert.equal((await action('rule.update',{...input,name:'Stale edit',expected:ruleEditToken(before)})).status,409);assert.equal(row('SELECT status FROM posts WHERE id=?',post.id).status,'scheduled');assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',post.id).status,'pending');
+ // A worker claim that wins before the edit transaction retains this occurrence.
+ before=row('SELECT * FROM rules WHERE id=?',rid);beforeBatch=()=>{run("UPDATE deliveries SET status='processing',attempts=1,context='encrypted-checkpoint' WHERE post_id=?",post.id);run("UPDATE posts SET status='publishing' WHERE id=?",post.id);};
+ assert.equal((await action('rule.update',{...input,name:'Future settings',expected:ruleEditToken(before)})).status,200);assert.equal(row('SELECT status FROM posts WHERE id=?',post.id).status,'publishing');assert.equal(row('SELECT context FROM deliveries WHERE post_id=?',post.id).context,'encrypted-checkpoint');assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid).n,1);
+ for(const status of ['uncertain','published']){
+  run('UPDATE posts SET status=? WHERE id=?',status,post.id);run('UPDATE deliveries SET status=? WHERE post_id=?',status,post.id);before=row('SELECT * FROM rules WHERE id=?',rid);
+  assert.equal((await action('rule.update',{...input,name:'Keep '+status,expected:ruleEditToken(before)})).status,200);assert.equal(row('SELECT status FROM posts WHERE id=?',post.id).status,status);assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',post.id).status,status);
+ }
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);run("DELETE FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);
+});
+await check('A stale folder generator cannot enqueue an obsolete configuration after an edit',async()=>{
+ const folder=await mod('lib/folder-reels');const rid=security.id(),input={id:rid,name:'Generator race',mode:'folder_reel',scheduleMode:'interval',minutes:60,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+300000,order:'sequence',folder:'Geral',caption:'',accountIds:[aid],approved:true};
+ await action('rule.save',input);run("UPDATE deliveries SET status='cancelled' WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);run("UPDATE posts SET status='cancelled',recurrence_key=recurrence_key||':test' WHERE json_extract(options,'$.folderReelRule')=?",rid);
+ beforeBatch=()=>run('UPDATE rules SET approved_at=approved_at+1 WHERE id=?',rid);await folder.generateFolderReels(userA.userId,rid);
+ assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.folderReelRule')=? AND status='scheduled'",rid).n,0);
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);run("DELETE FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);
+});
+
+await check('Routine edits enforce group scope and support fixed times and cycle settings',async()=>{
+ const {ruleEditToken}=await mod('lib/rule-config'),folder=await mod('lib/folder-reels'),rid=security.id(),group=security.id(),other=security.id(),groupMedia=security.id(),groupAccount=security.id();
+ for(const g of [group,other])run('INSERT INTO workspace_groups(id,owner,name,name_key,created_at) VALUES(?,?,?,?,?)',g,userA.userId,g,g,Date.now());
+ for(const [table,base,overrides] of [['media',row('SELECT * FROM media WHERE id=?',mid),{id:groupMedia,group_id:group,folder:'Scoped folder'}],['accounts',row('SELECT * FROM accounts WHERE id=?',aid),{id:groupAccount,group_id:group,provider_id:groupAccount}]]){const v={...base,...overrides},keys=Object.keys(v);run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,...Object.values(v));}
+ const input={id:rid,name:'Group routine',mode:'folder_reel',scheduleMode:'interval',minutes:60,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+300000,order:'sequence',folder:'Scoped folder',caption:'',accountIds:[groupAccount],approved:true};
+ const scoped=(a,data,g)=>route.POST(new Request('https://firma.test/api/app',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://firma.test'},body:JSON.stringify({action:a,data,groupId:g})}));
+ const create=await scoped('rule.save',input,group);assert.equal(create.status,200,await create.text());await folder.folderReelAction('rule.toggle',{id:rid,active:false},userA.userId,group);
+ let prior=row('SELECT * FROM rules WHERE id=?',rid);const edit={...input,expected:ruleEditToken(prior),name:'Fixed times',scheduleMode:'times',times:['10:00','18:00'],days:[1,3,5],from:'08:00',until:'22:00'};
+ assert.equal((await scoped('rule.update',edit,other)).status,409);assert.equal(row('SELECT name FROM rules WHERE id=?',rid).name,'Group routine');
+ assert.equal((await scoped('rule.update',{...edit,accountIds:[aid]},group)).status,409);
+ const updated=await scoped('rule.update',edit,group);assert.equal(updated.status,200,await updated.text());prior=row('SELECT * FROM rules WHERE id=?',rid);assert.equal(prior.group_id,group);assert.equal(prior.active,0);assert.deepEqual(JSON.parse(prior.time).times,['10:00','18:00']);assert.deepEqual(JSON.parse(prior.weekdays),[1,3,5]);
+ // A grouped routine can also be edited from the all-workspaces view.
+ assert.equal((await action('rule.update',{...edit,expected:ruleEditToken(prior),scheduleMode:'cycle',minutes:120})).status,200);assert.equal(JSON.parse(row('SELECT time FROM rules WHERE id=?',rid).time).mode,'cycle');
+ await folder.folderReelAction('rule.delete',{id:rid},userA.userId,group);run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);run("DELETE FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);run('DELETE FROM accounts WHERE id=?',groupAccount);run('DELETE FROM media WHERE id=?',groupMedia);for(const g of [group,other])run('DELETE FROM workspace_groups WHERE id=?',g);
+});
+await check('Daily Story edits replace future untouched occurrences without duplicating days already started',async()=>{
+ const daily=await mod('lib/daily-stories'),{ruleEditToken}=await mod('lib/rule-config');const rid=security.id(),day=daily.followingDay(daily.localDay(Date.now(),'America/Sao_Paulo'));
+ const input={id:rid,name:'Daily edit',mode:'daily_story',time:'12:00',startsOn:day,mediaIds:[mid],accountIds:[aid],approved:true};assert.equal((await action('rule.save',input)).status,200);
+ const old=row("SELECT * FROM posts WHERE json_extract(options,'$.dailyStoryRule')=? ORDER BY scheduled_at LIMIT 1",rid),before=row('SELECT * FROM rules WHERE id=?',rid);
+ const edit={...input,name:'Updated Story',time:'15:00',expected:ruleEditToken(before)};const result=await action('rule.update',edit);assert.equal(result.status,200,await result.text());assert.equal(row('SELECT status FROM posts WHERE id=?',old.id).status,'cancelled');
+ const next=row("SELECT * FROM posts WHERE json_extract(options,'$.dailyStoryRule')=? AND status='scheduled' ORDER BY scheduled_at LIMIT 1",rid);assert(next);assert.notEqual(next.id,old.id);assert.equal(next.scheduled_at,domain.localToEpoch(day+'T15:00','America/Sao_Paulo'));
+ run("UPDATE posts SET status='publishing',scheduled_at=? WHERE id=?",Date.now()-1000,next.id);run("UPDATE deliveries SET status='processing',attempts=1,context='existing-checkpoint' WHERE post_id=?",next.id);
+ const updated=row('SELECT * FROM rules WHERE id=?',rid);assert.equal((await action('rule.update',{...edit,time:'16:00',expected:ruleEditToken(updated)})).status,200);assert.equal(row('SELECT status FROM posts WHERE id=?',next.id).status,'publishing');assert.equal(row('SELECT context FROM deliveries WHERE post_id=?',next.id).context,'existing-checkpoint');
+ assert.equal(row("SELECT count(*) n FROM posts WHERE json_extract(options,'$.dailyStoryRule')=? AND json_extract(options,'$.dailyStoryDate')=? AND status<>'cancelled'",rid,day).n,1);
+ await daily.dailyStoryAction('rule.delete',{id:rid},userA.userId,null);run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.dailyStoryRule')=?)",rid);run("DELETE FROM posts WHERE json_extract(options,'$.dailyStoryRule')=?",rid);
+});
+await check('Draft routines are editable without changing existing drafts or reactivating a pause',async()=>{
+ const {ruleEditToken}=await mod('lib/rule-config'),rid=security.id();run("INSERT INTO rules(id,owner,name,time,weekdays,account_ids,media_ids,caption,active,created_at) VALUES(?,?,'Draft rule','12:00','[1,3,5]',?,?,?,0,?)",rid,userA.userId,JSON.stringify([aid]),JSON.stringify([mid]),'old',Date.now());
+ const before=row('SELECT * FROM rules WHERE id=?',rid),input={id:rid,expected:ruleEditToken(before),name:'Edited draft rule',time:'18:30',weekdays:[2,4],caption:'new draft caption',accountIds:[aid],mediaIds:[mid]};
+ const response=await action('rule.update',input);assert.equal(response.status,200,await response.text());const updated=row('SELECT * FROM rules WHERE id=?',rid);assert.equal(updated.time,'18:30');assert.deepEqual(JSON.parse(updated.weekdays),[2,4]);assert.equal(updated.active,0);assert.equal(updated.caption,input.caption);assert.equal((await action('rule.update',input)).status,409);run('DELETE FROM rules WHERE id=?',rid);
+});
 await check('Owned data stays private and cross-owner references are rejected',async()=>{globalThis.testUser=userB;const state=await(await route.GET()).json();assert.equal(state.media.length,0);assert.equal(state.accounts.length,0);assert.equal((await action('post.save',payload)).status,400);assert.equal((await mediaRoute.GET(new Request('https://firma.test/api/media/'+mid),{params:Promise.resolve({id:mid})})).status,404);globalThis.testUser=userA;const ownerState=JSON.stringify(await(await route.GET()).json());assert(!ownerState.includes('FAKE-ONLY'));assert(!ownerState.includes('fake-secret'));});
 let pid;
 await check('Scheduling creates one delivery per account and requires a date',async()=>{assert.equal((await action('post.save',{...payload,scheduledAt:null})).status,400);const result=await action('post.save',{...payload,accountIds:[aid,aid]});assert.equal(result.status,200);pid=(await result.json()).id;assert.equal(row('SELECT count(*) n FROM deliveries WHERE post_id=?',pid).n,1);});
@@ -948,6 +1044,25 @@ await check('An approved daily occurrence publishes as an Instagram Story throug
  }finally{Date.now=clock;globalThis.fetch=oldFetch;Object.assign(testEnv,settings);}
 });
 
+
+await check('Folder Reels advances through the entire folder and repeats without a manual trigger; legacy empty queues wake up',async()=>{
+ const folder=await mod('lib/folder-reels'),realNow=Date.now,oldFetch=globalThis.fetch,oldUser=globalThis.testUser,settings={...testEnv};const owner='folder-continuity';let now=Date.parse('2026-11-19T09:00:00Z'),sends=0;
+ Date.now=()=>now;testEnv.SCHEDULER_ENABLED='true';testEnv.RUNNER_OWNER_ID=owner;testEnv.RUNNER_SERVICE_TOKEN_SHA256='A'.repeat(43);globalThis.testUser={userId:owner,displayName:'Folder test',email:'folder@example.invalid'};
+ try{
+ await server.workspace(owner);const account=security.id(),mids=[security.id(),security.id(),security.id()];
+ run('INSERT INTO accounts(id,owner,platform,provider_id,username,display_name,tokens,expires_at,scopes,state,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',account,owner,'instagram','12345','folder','Folder',await security.seal({access_token:'FAKE-FOLDER'},testEnv.TOKEN_ENCRYPTION_KEY),now+1e10,'basic','connected',now);
+ run('INSERT INTO provider_configs(id,owner,platform,encrypted,updated_at) VALUES(?,?,?,?,?)',security.id(),owner,'instagram',await security.seal({clientId:'fake',clientSecret:'fake'},testEnv.TOKEN_ENCRYPTION_KEY),now);
+ for(const [i,mid] of mids.entries()){run('INSERT INTO media(id,owner,name,mime,size,storage_key,duration,folder,created_at) VALUES(?,?,?,?,?,?,?,?,?)',mid,owner,'Video '+i,'video/mp4',3,'folder-'+i,10,'Continuity',now+i);objects.set('folder-'+i,new Uint8Array([1,2,3]).buffer);}
+ const rid=security.id();await folder.folderReelAction('rule.save',{id:rid,name:'Reels continuidade',folder:'Continuity',accountIds:[account],mode:'folder_reel',scheduleMode:'interval',minutes:5,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:now+180000,order:'sequence',caption:'',approved:true},owner,null);
+ globalThis.fetch=async(url)=>{if(String(url).endsWith('/media_publish')){sends++;return Response.json({id:'reel-'+sends});}if(String(url).endsWith('/media'))return Response.json({id:'container-'+sends});return Response.json({status_code:'FINISHED'});};
+ const next=()=>row("SELECT * FROM posts WHERE owner=? AND status='scheduled' ORDER BY scheduled_at LIMIT 1",owner);
+ for(let i=0;i<4;i++){const current=next();assert(current,'next video must already be queued');assert.equal(JSON.parse(current.media_ids)[0],mids[i%3]);now=current.scheduled_at;await queue.processQueue(owner);assert.equal(row('SELECT status FROM posts WHERE id=?',current.id).status,'published');assert(next(),'same queue step prepares successor');assert.equal(await folder.folderReelPlanning(owner),0);const hb=await(await runner.GET(new Request('https://firma.test/api/runner'))).json();assert(hb.queue.nextCheckAt>now);await queue.processQueue(owner);assert.equal(sends,i+1,'poll must not repeat published video');}
+ // Reproduce v37: completed first occurrence, no prepared successor.
+ const orphan=next();run('DELETE FROM deliveries WHERE post_id=?',orphan.id);run('DELETE FROM posts WHERE id=?',orphan.id);const before=row('SELECT count(*) n FROM posts WHERE owner=?',owner).n;
+ const status=await(await runner.GET(new Request('https://firma.test/api/runner'))).json();assert.equal(status.queue.planning,1);assert.equal(status.queue.nextCheckAt,now);assert.equal(row('SELECT count(*) n FROM posts WHERE owner=?',owner).n,before,'GET is read-only');await queue.processQueue(owner);assert(next(),'verified POST repairs missing successor');assert.equal(sends,4);
+ await folder.folderReelAction('rule.toggle',{id:rid,active:false},owner,null);assert.equal(await folder.folderReelPlanning(owner),0);
+ }finally{Date.now=realNow;globalThis.fetch=oldFetch;globalThis.testUser=oldUser;Object.assign(testEnv,settings);run('DELETE FROM deliveries WHERE owner=?',owner);run('DELETE FROM posts WHERE owner=?',owner);run('DELETE FROM rules WHERE owner=?',owner);}
+});
 
 await check('Profile photos stay owner-scoped, reject redirects and retain the last usable image',async()=>{
  const photo=await mod('app/api/accounts/[id]/photo/route'),oldFetch=globalThis.fetch,id=security.id();
