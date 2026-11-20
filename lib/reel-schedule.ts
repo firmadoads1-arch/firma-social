@@ -1,4 +1,5 @@
-export type ReelSchedule={rotation?:string;mode:'interval'|'cycle'|'times';minutes:number;times:string[];days:number[];from:string;until:string;startsAt:number;order:'sequence'|'shuffle';folder:string;caption:string};
+import type {ReelContent} from './reel-content';
+export type ReelSchedule=Partial<ReelContent> & {rotation?:string;mode:'interval'|'cycle'|'times';minutes:number;times:string[];days:number[];from:string;until:string;startsAt:number;order:'sequence'|'shuffle';folder:string;caption:string};
 const minute=(s:string)=>Number(s.slice(0,2))*60+Number(s.slice(3));
 export function reelSlots(c:ReelSchedule,count:number,timezone:string,after:number,limit=8){
  const step=c.mode==='cycle'?c.minutes/Math.max(1,count):c.minutes;

@@ -1,3 +1,5 @@
+import {reelContentInput,reelCaptions} from './reel-content';
+import {usableCover} from './editor-defaults';
 import {updateRule} from './rule-update';
 import {z} from 'zod';
 import {database,first,list,run,runtime,config} from './server';
@@ -13,19 +15,24 @@ export async function folderReelAction(action:string,data:any,owner:string,group
  if(['rule.save','rule.update'].includes(action)&&data.mode!=='folder_reel')return null;
  if(action==='rule.save'||action==='rule.update'){
   const v=schema.parse({...data,mode:data.scheduleMode});const editing=action==='rule.update',prior=await first('SELECT * FROM rules WHERE id=? AND owner=?',v.id,owner);if(editing){if(!prior||prior.mode!=='folder_reel')throw new AppError('Rotina não encontrada.',404);await requireItems(owner,group,'rules',[v.id]);}else if(prior){if(prior.mode!=='folder_reel')throw new AppError('Identificador em uso.',409);return {ok:true,id:v.id};}
+  const previous=prior?JSON.parse(prior.time):null,content=reelContentInput.parse({...previous,...data});
   if(!schedulerEnabled(owner,runtime()))throw new AppError('Ative a fila automática antes de criar a rotina.',409);
   if(v.startsAt<Date.now()+60000)throw new AppError('Escolha um início pelo menos um minuto à frente.');
   if(v.mode==='times'&&!v.times.length)throw new AppError('Informe pelo menos um horário.');
   await requireItems(owner,group,'accounts',v.accountIds);
   const accts=await accountRows(owner);if(v.accountIds.some(a=>!accts.some(x=>x.id===a&&x.platform==='instagram'&&x.state==='connected')))throw new AppError('Selecione apenas perfis Instagram conectados.');
   const media=await folderMedia(owner,editing?prior.group_id:group,v.folder);if(!media.length||media.length>100)throw new AppError('Escolha uma pasta com 1 a 100 vídeos MP4/MOV.');
-  const previous=prior?JSON.parse(prior.time):null;const c:ReelSchedule={...v,rotation:editing?(previous.folder===v.folder&&previous.order===v.order?previous.rotation:id()):undefined};const ws=await first('SELECT timezone FROM workspaces WHERE owner=?',owner);
+  const c:ReelSchedule={...v,...content,rotation:editing?(previous.folder===v.folder&&previous.order===v.order?previous.rotation:id()):undefined};const ws=await first('SELECT timezone FROM workspaces WHERE owner=?',owner);
+  if(content.coverMode==='custom'){const cover=await first('SELECT id,mime,size,group_id FROM media WHERE owner=? AND id=?',owner,content.coverId!);const scope=editing?prior.group_id:group;if(!cover||!usableCover(cover)||cover.group_id&&cover.group_id!==scope&&previous?.coverId!==cover.id)throw new AppError('Selecione uma capa JPG de até 8 MB da área da rotina ou da área Geral.');}
+  if(Object.keys(content.videoCaptions).some(mid=>!media.some(m=>m.id===mid)))throw new AppError('Uma das legendas não pertence aos vídeos desta pasta. Atualize a seleção.');
+  if(content.captionMode==='unique')try{c.videoCaptions=reelCaptions(media,content.captionGenerator,content.videoCaptions);}catch(e:any){throw new AppError(e.message??'Revise as legendas dos vídeos.');}
+  const mediaReferences=[...media.map(m=>m.id),...(content.coverMode==='custom'?[content.coverId!]:[])];
   if(!reelSlots(c,media.length,ws.timezone,v.startsAt,1).length)throw new AppError('Nenhum horário válido nos próximos 35 dias. Aumente o período do ciclo ou ajuste os horários.');
   if(v.mode==='cycle'&&v.minutes<media.length)throw new AppError('O ciclo exige pelo menos um minuto por vídeo.');
   const issues=validatePublishing({accountIds:v.accountIds,mediaIds:[media[0].id],platforms:['instagram'],format:'video',caption:v.caption,captions:{},scheduledAt:v.startsAt,options:{locationMode:'none'}} as any,[media[0]],accts,Date.now());if(issues.length)throw new AppError(issues.join(' '));
   if(!await config(owner,'instagram'))throw new AppError('Configure o aplicativo Instagram.');
-  if(editing)await updateRule(prior,data.expected,{name:v.name,time:JSON.stringify(c),weekdays:JSON.stringify(v.days),account_ids:JSON.stringify([...new Set(v.accountIds)]),media_ids:JSON.stringify(media.map(m=>m.id)),caption:v.caption,starts_on:String(v.startsAt)});
-  else await run("INSERT INTO rules(id,owner,name,time,weekdays,account_ids,media_ids,caption,active,created_at,group_id,mode,starts_on,approved_at) VALUES(?,?,?,?,?,?,?,?,1,?,?,'folder_reel',?,?)",v.id,owner,v.name,JSON.stringify(c),JSON.stringify(v.days),JSON.stringify([...new Set(v.accountIds)]),JSON.stringify(media.map(m=>m.id)),v.caption,Date.now(),group,String(v.startsAt),Date.now());
+  if(editing)await updateRule(prior,data.expected,{name:v.name,time:JSON.stringify(c),weekdays:JSON.stringify(v.days),account_ids:JSON.stringify([...new Set(v.accountIds)]),media_ids:JSON.stringify(mediaReferences),caption:v.caption,starts_on:String(v.startsAt)});
+  else await run("INSERT INTO rules(id,owner,name,time,weekdays,account_ids,media_ids,caption,active,created_at,group_id,mode,starts_on,approved_at) VALUES(?,?,?,?,?,?,?,?,1,?,?,'folder_reel',?,?)",v.id,owner,v.name,JSON.stringify(c),JSON.stringify(v.days),JSON.stringify([...new Set(v.accountIds)]),JSON.stringify(mediaReferences),v.caption,Date.now(),group,String(v.startsAt),Date.now());
   await generateFolderReels(owner,v.id);return {ok:true,id:v.id};
  }
  if(!['rule.toggle','rule.delete'].includes(action))return null;
@@ -45,16 +52,20 @@ export async function generateFolderReels(owner:string,ruleId?:string){
   // Keep a single occurrence in flight. Unknown outcomes block only that profile.
   if(await first("SELECT id FROM posts WHERE owner=? AND json_extract(options,'$.folderReelRule')=? AND status IN ('scheduled','publishing') LIMIT 1",owner,r.id))continue;
   const c=JSON.parse(r.time) as ReelSchedule,media=await folderMedia(owner,r.group_id,c.folder);if(!media.length||media.length>100)continue;
+  const parsed=reelContentInput.safeParse(c);if(!parsed.success)continue;const content=parsed.data;
+  const assets=await assetRows(owner);if(content.coverMode==='custom'&&!assets.some(m=>m.id===content.coverId&&usableCover(m)))continue;
+  let captions:Record<string,string>={};try{if(content.captionMode==='unique')captions=reelCaptions(media,content.captionGenerator,content.videoCaptions);}catch{continue;}
   const history=await first("SELECT count(*) n,MAX(scheduled_at) last FROM posts WHERE owner=? AND status<>'cancelled' AND json_extract(options,'$.folderReelRule')=? AND COALESCE(json_extract(options,'$.folderReelRotation'),'legacy')=?",owner,r.id,c.rotation??'legacy');
   const at=reelSlots(c,media.length,ws.timezone,Math.max(Date.now()+60000,(history?.last??0)+60000),1)[0];if(!at)continue;
   const accts=await accountRows(owner),selected=accts.filter(a=>a.platform==='instagram'&&a.state==='connected'&&JSON.parse(r.account_ids).includes(a.id));if(!selected.length)continue;
-  const m=media[reelIndex(history?.n??0,media.length,c.order,r.id)],assets=await assetRows(owner),now=Date.now(),pid=id();
-  const p={accountIds:selected.map(a=>a.id),mediaIds:[m.id],platforms:['instagram'],format:'video',caption:c.caption,captions:{},scheduledAt:at,options:{locationMode:'none',folderReelRule:r.id,folderReelRotation:c.rotation??'legacy'}} as any;
+  const m=media[reelIndex(history?.n??0,media.length,c.order,r.id)],caption=content.captionMode==='unique'?captions[m.id]:c.caption,now=Date.now(),pid=id();
+  const mediaReferences=[...media.map(m=>m.id),...(content.coverMode==='custom'?[content.coverId!]:[])];
+  const p={accountIds:selected.map(a=>a.id),mediaIds:[m.id],platforms:['instagram'],format:'video',caption,captions:{},scheduledAt:at,options:{locationMode:'none',coverMode:content.coverMode,instagramCoverMediaId:content.coverMode==='custom'?content.coverId:null,folderReelRule:r.id,folderReelRotation:c.rotation??'legacy'}} as any;
   if(validatePublishing(p,[m],accts,now).length)continue;prepareOptions(p,accts,assets);
   const key=r.id+':reel:'+at;
-  const statements=[database().prepare(`INSERT INTO posts(id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id,recurrence_key) SELECT ?,?,?,?,'{}','["instagram"]',?,?,'video','scheduled',?,?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM rules WHERE id=? AND owner=? AND active=1 AND approved_at=?) ON CONFLICT(owner,recurrence_key) DO NOTHING`).bind(pid,owner,r.name,c.caption,JSON.stringify(p.accountIds),JSON.stringify(p.mediaIds),at,JSON.stringify(p.options),now,now,r.group_id,key,r.id,owner,r.approved_at)];
+  const statements=[database().prepare(`INSERT INTO posts(id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id,recurrence_key) SELECT ?,?,?,?,'{}','["instagram"]',?,?,'video','scheduled',?,?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM rules WHERE id=? AND owner=? AND active=1 AND approved_at=?) ON CONFLICT(owner,recurrence_key) DO NOTHING`).bind(pid,owner,r.name,caption,JSON.stringify(p.accountIds),JSON.stringify(p.mediaIds),at,JSON.stringify(p.options),now,now,r.group_id,key,r.id,owner,r.approved_at)];
   for(const a of selected)statements.push(database().prepare("INSERT INTO deliveries(id,post_id,owner,account_id,platform,status,context,attempts,next_run,created_at,updated_at) SELECT ?,?,?,?,'instagram','pending','{}',0,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND owner=?)").bind(id(),pid,owner,a.id,at,now,now,pid,owner));
-  await database().batch(statements);await run('UPDATE rules SET media_ids=? WHERE id=? AND owner=? AND approved_at=?',JSON.stringify(media.map(m=>m.id)),r.id,owner,r.approved_at);
+  await database().batch(statements);await run('UPDATE rules SET media_ids=? WHERE id=? AND owner=? AND approved_at=?',JSON.stringify(mediaReferences),r.id,owner,r.approved_at);
  }
 }
 export const folderReelReady=(d:string,p:string)=>`EXISTS(SELECT 1 FROM rules fr WHERE fr.id=json_extract(${p}.options,'$.folderReelRule') AND fr.owner=${p}.owner AND fr.mode='folder_reel' AND fr.active=1 AND fr.approved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM deliveries old JOIN posts op ON op.id=old.post_id AND op.owner=old.owner WHERE old.owner=${d}.owner AND old.account_id=${d}.account_id AND old.status='uncertain' AND json_extract(op.options,'$.folderReelRule')=fr.id AND op.scheduled_at<${p}.scheduled_at))`;
