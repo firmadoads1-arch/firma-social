@@ -51,6 +51,33 @@ await check('Folder Reels schedules safely, deduplicates and respects pause and 
  await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);assert.equal(row('SELECT status FROM deliveries WHERE post_id=?',p.id).status,'cancelled');run('DELETE FROM deliveries WHERE post_id=?',p.id);run('DELETE FROM posts WHERE id=?',p.id);
 });
 
+await check('Folder Reel rounds enqueue ten independent videos for every account, deduplicate, and continue four hours later',async()=>{
+ const folder=await mod('lib/folder-reels'),rid=security.id(),folderName='Batch round fixtures',mids=[];
+ const base=row('SELECT * FROM media WHERE id=?',mid);
+ for(let i=0;i<25;i++){
+  const nextId=security.id(),v={...base,id:nextId,folder:folderName,name:'video-'+i+'.mp4',created_at:i},keys=Object.keys(v);
+  run(`INSERT INTO media (${keys.join(',')}) VALUES(${keys.map(()=>'?').join(',')})`,...keys.map(k=>v[k]));mids.push(nextId);
+ }
+ const input={id:rid,name:'Ten every four hours',mode:'folder_reel',scheduleMode:'batch',batchSize:10,minutes:240,times:[],days:[0,1,2,3,4,5,6],from:'00:00',until:'23:59',startsAt:Date.now()+300000,order:'sequence',folder:folderName,caption:'batch',accountIds:[aid],approved:true};
+ try{
+  await folder.folderReelAction('rule.save',input,userA.userId,null);
+  const getPosts=()=>rows("SELECT * FROM posts WHERE json_extract(options,'$.folderReelRule')=? ORDER BY scheduled_at,json_extract(options,'$.folderReelBatchPosition')",rid);
+  let posts=getPosts();assert.equal(posts.length,10);assert.equal(new Set(posts.map(p=>p.scheduled_at)).size,1);assert.deepEqual(posts.map(p=>JSON.parse(p.media_ids)[0]),mids.slice(0,10));
+  assert.equal(row("SELECT count(*) n FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid).n,10);
+  await folder.generateFolderReels(userA.userId,rid);assert.equal(getPosts().length,10,'an unfinished round cannot generate another');
+  const first=posts[0];run("UPDATE deliveries SET status='uncertain' WHERE post_id=?",first.id);
+  assert.equal(row(`SELECT count(*) n FROM deliveries d JOIN posts p ON p.id=d.post_id WHERE p.id=? AND ${folder.folderReelReady('d','p')}`,posts[1].id).n,0,'same-time later items honor uncertainty');
+  run("UPDATE deliveries SET status='published' WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);
+  run("UPDATE posts SET status='published' WHERE json_extract(options,'$.folderReelRule')=?",rid);
+  await folder.generateFolderReels(userA.userId,rid);posts=getPosts();assert.equal(posts.length,20);assert.equal(posts[10].scheduled_at-first.scheduled_at,4*3600000);assert.deepEqual(posts.slice(10).map(p=>JSON.parse(p.media_ids)[0]),mids.slice(10,20));
+ }finally{
+  await folder.folderReelAction('rule.delete',{id:rid},userA.userId,null);
+  run("DELETE FROM deliveries WHERE post_id IN(SELECT id FROM posts WHERE json_extract(options,'$.folderReelRule')=?)",rid);
+  run("DELETE FROM posts WHERE json_extract(options,'$.folderReelRule')=?",rid);
+  for(const mediaId of mids)run('DELETE FROM media WHERE id=?',mediaId);
+ }
+});
+
 await check('Editing a folder routine replaces only untouched schedules and all settings',async()=>{
  const {ruleEditToken}=await mod('lib/rule-config'),folder=await mod('lib/folder-reels');
  const rid=security.id(),newMedia=security.id(),second=security.id(),baseMedia=row('SELECT * FROM media WHERE id=?',mid),baseAccount=row('SELECT * FROM accounts WHERE id=?',aid);

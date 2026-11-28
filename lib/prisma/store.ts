@@ -52,7 +52,7 @@ async function upload(r:Request,owner:string,p:any,url:URL){
   await Promise.all([bucket().put(key,stream.readable,{httpMetadata:{contentType:mime}}),pumping]);
   // One atomic receipt and one shared-library item. A concurrent retry cannot duplicate either.
   await database().batch([
-   database().prepare('INSERT INTO media(id,owner,group_id,name,mime,size,storage_key,width,height,duration,folder,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM media WHERE id=?)').bind(mid,owner,p.group_id,name,mime,size,key,dimension(meta.video?.width),dimension(meta.video?.height),dimension(meta.video?.duration),p.folder,now,mid),
+   database().prepare('INSERT INTO media(id,owner,group_id,name,mime,size,storage_key,width,height,duration,folder,created_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM media WHERE id=?)').bind(mid,owner,p.group_id,name,mime,size,key,dimension(meta.video?.width),dimension(meta.video?.height),dimension(meta.video?.duration),kind==='original'?'Originais / '+p.name:p.folder,now,mid),
    database().prepare('INSERT INTO prisma_files(id,owner,project_id,tool,kind,settings,metadata,created_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM media WHERE id=? AND owner=? AND storage_key=?)').bind(mid,owner,p.id,tool,kind,settings,JSON.stringify(meta),now,mid,owner,key),
   ]);
   const row=await first('SELECT storage_key FROM media WHERE id=? AND owner=?',mid,owner);if(row?.storage_key!==key)await bucket().delete(key);

@@ -48,3 +48,18 @@ Os acessos principais do estúdio abrem Hash e metadados. Cada exportação usa 
 Mesmo Reel em várias contas usa esse mesmo modo para as próximas versões por perfil, com ajustes neutros. Arquivos já salvos ou entregas já preparadas conservam seus recibos e conteúdo. A fila e as autorizações de publicação seguem o fluxo existente.
 
 `node tests/prisma/remux-preservation.mjs` executa o motor WASM real com mídia sintética e confirma hashes distintos, igualdade dos pacotes de vídeo/áudio, orientação, vídeo sem áudio, campos personalizados e o caminho real de preparação por perfil. Também integra `npm run test:prisma`.
+
+## Templates em lote e destino
+
+- Abra **Templates em lote** no menu do Prisma, importe vários vídeos e configure o layout uma vez. Todos recebem os mesmos ajustes; é possível trocar o vídeo da prévia sem mudar o template do lote.
+- No editor de um vídeo, **Aplicar este template a vários vídeos**, seleção múltipla ou arrastar vários arquivos leva os vídeos e a configuração atual ao modo em lote. Também funciona com seleção múltipla da biblioteca.
+- Com **Salvar na biblioteca**, as exportações novas vão para a pasta do projeto (por exemplo, `Prisma / Rider CLT`); originais novos vão para `Originais / Rider CLT`. Arquivos existentes não são movidos. Escolha a pasta das exportações na rotina.
+- O limite continua sendo 50 entradas por lote, 80 MB por arquivo e 3 minutos por vídeo; o processamento requer manter a aba aberta.
+
+## Reels por rodada
+
+Em **Rotinas**, escolha **Vários Reels por rodada** e informe **Vídeos por rodada** (1–100) e **Intervalo entre rodadas**, em minutos. Exemplo: 10 vídeos e 240 minutos significa dez Reels separados para cada perfil selecionado, seguidos dos próximos dez na janela quatro horas depois. Se a pasta tiver menos vídeos, a rodada é limitada à quantidade disponível.
+
+A rodada inteira é preparada em uma transação e usa chaves de recorrência para não duplicar agendamentos em uma reconsulta. Só há uma rodada aberta por rotina. Dias e janelas locais continuam sendo respeitados; atraso pula janelas perdidas e não gera acúmulo. Um resultado incerto bloqueia envios seguintes para o mesmo perfil, inclusive dentro da mesma rodada.
+
+O horário é uma janela de entrada na fila, sujeito ao motor, à frequência de verificação e aos limites da plataforma. Não há garantia de concluir dez envios em cinco minutos. Editar e ativar exigem a revisão já existente; esta implementação não modifica rotinas ao publicar o código.

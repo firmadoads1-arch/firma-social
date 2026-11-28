@@ -1,5 +1,5 @@
 import type {ReelContent} from './reel-content';
-export type ReelSchedule=Partial<ReelContent> & {rotation?:string;mode:'interval'|'cycle'|'times';minutes:number;times:string[];days:number[];from:string;until:string;startsAt:number;order:'sequence'|'shuffle';folder:string;caption:string};
+export type ReelSchedule=Partial<ReelContent> & {rotation?:string;mode:'interval'|'cycle'|'times'|'batch';batchSize?:number;minutes:number;times:string[];days:number[];from:string;until:string;startsAt:number;order:'sequence'|'shuffle';folder:string;caption:string};
 const minute=(s:string)=>Number(s.slice(0,2))*60+Number(s.slice(3));
 export function reelSlots(c:ReelSchedule,count:number,timezone:string,after:number,limit=8){
  const step=c.mode==='cycle'?c.minutes/Math.max(1,count):c.minutes;
@@ -24,4 +24,15 @@ export function reelIndex(index:number,count:number,order:string,seed:string){
  for(const ch of seed+':'+cycle)s=Math.imul(s^ch.charCodeAt(0),16777619)>>>0;
  for(let i=count-1;i>0;i--){s=(Math.imul(s,1664525)+1013904223)>>>0;const j=s%(i+1);[items[i],items[j]]=[items[j],items[i]];}
  return items[index%count];
+}
+
+/** One complete round, with stable video order and recurrence keys for retry safety. */
+export function reelRound(c:ReelSchedule,count:number,timezone:string,after:number,historyCount:number,seed:string){
+ const at=reelSlots(c,count,timezone,after,1)[0];
+ if(at===undefined||!count)return [];
+ const quantity=c.mode==='batch'?Math.min(count,Math.max(1,Math.min(100,Math.trunc(c.batchSize??1)))):1;
+ return Array.from({length:quantity},(_,position)=>({
+  at,position,index:reelIndex(historyCount+position,count,c.order,seed),
+  key:seed+':reel:'+at+(c.mode==='batch'?':'+position:'')
+ }));
 }
