@@ -8,9 +8,9 @@ import {schedulerEnabled} from './scheduler';
 import {requireItems} from './group-scope';
 import {prepareOptions,accountRows,assetRows} from './editing';
 import {validatePublishing} from './domain';
-import {reelSlots,reelIndex,type ReelSchedule} from './reel-schedule';
+import {reelSlots,reelRound,type ReelSchedule} from './reel-schedule';
 const clock=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const schema=z.object({id:z.string().uuid(),name:z.string().trim().min(1).max(80),folder:z.string().min(1).max(60),accountIds:z.array(z.string().uuid()).min(1).max(100),mode:z.enum(['interval','cycle','times']),minutes:z.number().int().min(1).max(43200),times:z.array(clock).max(48),days:z.array(z.number().int().min(0).max(6)).min(1),from:clock,until:clock,startsAt:z.number().int().positive(),order:z.enum(['sequence','shuffle']),caption:z.string().max(2200),approved:z.literal(true)});
+const schema=z.object({id:z.string().uuid(),name:z.string().trim().min(1).max(80),folder:z.string().min(1).max(60),accountIds:z.array(z.string().uuid()).min(1).max(100),mode:z.enum(['interval','cycle','times','batch']),batchSize:z.number().int().min(1).max(100).default(1),minutes:z.number().int().min(1).max(43200),times:z.array(clock).max(48),days:z.array(z.number().int().min(0).max(6)).min(1),from:clock,until:clock,startsAt:z.number().int().positive(),order:z.enum(['sequence','shuffle']),caption:z.string().max(2200),approved:z.literal(true)});
 export async function folderReelAction(action:string,data:any,owner:string,group:string|null){
  if(['rule.save','rule.update'].includes(action)&&data.mode!=='folder_reel')return null;
  if(action==='rule.save'||action==='rule.update'){
@@ -56,19 +56,26 @@ export async function generateFolderReels(owner:string,ruleId?:string){
   const assets=await assetRows(owner);if(content.coverMode==='custom'&&!assets.some(m=>m.id===content.coverId&&usableCover(m)))continue;
   let captions:Record<string,string>={};try{if(content.captionMode==='unique')captions=reelCaptions(media,content.captionGenerator,content.videoCaptions);}catch{continue;}
   const history=await first("SELECT count(*) n,MAX(scheduled_at) last FROM posts WHERE owner=? AND status<>'cancelled' AND json_extract(options,'$.folderReelRule')=? AND COALESCE(json_extract(options,'$.folderReelRotation'),'legacy')=?",owner,r.id,c.rotation??'legacy');
-  const at=reelSlots(c,media.length,ws.timezone,Math.max(Date.now()+60000,(history?.last??0)+60000),1)[0];if(!at)continue;
+  const round=reelRound(c,media.length,ws.timezone,Math.max(Date.now()+60000,(history?.last??0)+60000),history?.n??0,r.id);if(!round.length)continue;
   const accts=await accountRows(owner),selected=accts.filter(a=>a.platform==='instagram'&&a.state==='connected'&&JSON.parse(r.account_ids).includes(a.id));if(!selected.length)continue;
-  const m=media[reelIndex(history?.n??0,media.length,c.order,r.id)],caption=content.captionMode==='unique'?captions[m.id]:c.caption,now=Date.now(),pid=id();
-  const mediaReferences=[...media.map(m=>m.id),...(content.coverMode==='custom'?[content.coverId!]:[])];
-  const p={accountIds:selected.map(a=>a.id),mediaIds:[m.id],platforms:['instagram'],format:'video',caption,captions:{},scheduledAt:at,options:{locationMode:'none',coverMode:content.coverMode,instagramCoverMediaId:content.coverMode==='custom'?content.coverId:null,folderReelRule:r.id,folderReelRotation:c.rotation??'legacy'}} as any;
-  if(validatePublishing(p,[m],accts,now).length)continue;prepareOptions(p,accts,assets);
-  const key=r.id+':reel:'+at;
-  const statements=[database().prepare(`INSERT INTO posts(id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id,recurrence_key) SELECT ?,?,?,?,'{}','["instagram"]',?,?,'video','scheduled',?,?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM rules WHERE id=? AND owner=? AND active=1 AND approved_at=?) ON CONFLICT(owner,recurrence_key) DO NOTHING`).bind(pid,owner,r.name,caption,JSON.stringify(p.accountIds),JSON.stringify(p.mediaIds),at,JSON.stringify(p.options),now,now,r.group_id,key,r.id,owner,r.approved_at)];
-  for(const a of selected)statements.push(database().prepare("INSERT INTO deliveries(id,post_id,owner,account_id,platform,status,context,attempts,next_run,created_at,updated_at) SELECT ?,?,?,?,'instagram','pending','{}',0,?,?,? WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND owner=?)").bind(id(),pid,owner,a.id,at,now,now,pid,owner));
+  const mediaReferences=[...media.map(m=>m.id),...(content.coverMode==='custom'?[content.coverId!]:[])],now=Date.now();
+  const statements:ReturnType<ReturnType<typeof database>['prepare']>[]=[];
+  let valid=true;
+  for(const slot of round){
+   const {at,position,key}=slot,m=media[slot.index],caption=content.captionMode==='unique'?captions[m.id]:c.caption,pid=id();
+   const p={accountIds:selected.map(a=>a.id),mediaIds:[m.id],platforms:['instagram'],format:'video',caption,captions:{},scheduledAt:at,options:{locationMode:'none',coverMode:content.coverMode,instagramCoverMediaId:content.coverMode==='custom'?content.coverId:null,folderReelRule:r.id,folderReelRotation:c.rotation??'legacy',folderReelBatchPosition:position}} as any;
+   if(validatePublishing(p,[m],accts,now).length){valid=false;break;}prepareOptions(p,accts,assets);
+   statements.push(database().prepare(`INSERT INTO posts(id,owner,title,caption,captions,platforms,account_ids,media_ids,format,status,scheduled_at,options,version,created_at,updated_at,group_id,recurrence_key) SELECT ?,?,?,?,'{}','["instagram"]',?,?,'video','scheduled',?,?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM rules WHERE id=? AND owner=? AND active=1 AND approved_at=?) AND NOT EXISTS(SELECT 1 FROM posts active WHERE active.owner=? AND json_extract(active.options,'$.folderReelRule')=? AND active.status IN ('scheduled','publishing') AND active.recurrence_key NOT IN(SELECT value FROM json_each(?))) ON CONFLICT(owner,recurrence_key) DO NOTHING`).bind(pid,owner,r.name,caption,JSON.stringify(p.accountIds),JSON.stringify(p.mediaIds),at,JSON.stringify(p.options),now,now,r.group_id,key,r.id,owner,r.approved_at,owner,r.id,JSON.stringify(round.map(item=>item.key))));
+   // One insert for every destination keeps the transaction bounded to two statements per video.
+   const destinations=selected.map(a=>({id:id(),accountId:a.id}));
+   statements.push(database().prepare(`INSERT INTO deliveries(id,post_id,owner,account_id,platform,status,context,attempts,next_run,created_at,updated_at) SELECT json_extract(value,'$.id'),?,?,json_extract(value,'$.accountId'),'instagram','pending','{}',0,?,?,? FROM json_each(?) WHERE EXISTS(SELECT 1 FROM posts WHERE id=? AND owner=?)`).bind(pid,owner,at,now,now,JSON.stringify(destinations),pid,owner));
+  }
+  // Commit the whole round or none of it; retries reuse the same recurrence keys.
+  if(!valid||!statements.length)continue;
   await database().batch(statements);await run('UPDATE rules SET media_ids=? WHERE id=? AND owner=? AND approved_at=?',JSON.stringify(mediaReferences),r.id,owner,r.approved_at);
  }
 }
-export const folderReelReady=(d:string,p:string)=>`EXISTS(SELECT 1 FROM rules fr WHERE fr.id=json_extract(${p}.options,'$.folderReelRule') AND fr.owner=${p}.owner AND fr.mode='folder_reel' AND fr.active=1 AND fr.approved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM deliveries old JOIN posts op ON op.id=old.post_id AND op.owner=old.owner WHERE old.owner=${d}.owner AND old.account_id=${d}.account_id AND old.status='uncertain' AND json_extract(op.options,'$.folderReelRule')=fr.id AND op.scheduled_at<${p}.scheduled_at))`;
+export const folderReelReady=(d:string,p:string)=>`EXISTS(SELECT 1 FROM rules fr WHERE fr.id=json_extract(${p}.options,'$.folderReelRule') AND fr.owner=${p}.owner AND fr.mode='folder_reel' AND fr.active=1 AND fr.approved_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM deliveries old JOIN posts op ON op.id=old.post_id AND op.owner=old.owner WHERE old.owner=${d}.owner AND old.account_id=${d}.account_id AND old.status='uncertain' AND json_extract(op.options,'$.folderReelRule')=fr.id AND (op.scheduled_at<${p}.scheduled_at OR (op.scheduled_at=${p}.scheduled_at AND COALESCE(json_extract(op.options,'$.folderReelBatchPosition'),0)<COALESCE(json_extract(${p}.options,'$.folderReelBatchPosition'),0)))))`;
 
 // Read-only wakeup for existing routines left without an occurrence. GET must
 // not create posts; only the verified POST prepares the next approved item.

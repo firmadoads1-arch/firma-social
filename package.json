@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "test": "npm run test:core && npm run test:prisma",
     "typecheck": "tsc --noEmit",
-    "test:core": "node tests/integration.mjs && node tests/worker-oauth.mjs && node tests/rendering.mjs && node tests/composer-media.mjs && node tests/story-alignment.mjs && node tests/video-preview.mjs && node tests/workspace-identity.mjs && node tests/queue-client.mjs",
+    "test:core": "node tests/reel-rounds.mjs && node tests/integration.mjs && node tests/worker-oauth.mjs && node tests/rendering.mjs && node tests/composer-media.mjs && node tests/story-alignment.mjs && node tests/video-preview.mjs && node tests/workspace-identity.mjs && node tests/queue-client.mjs",
     "test:prisma": "node tests/prisma-integration.mjs && node tests/prisma-ui.mjs && node tests/prisma/remux-preservation.mjs",
     "check": "npm run typecheck && npm test",
     "test:runner-service": "python3 tests/runner-service.py"

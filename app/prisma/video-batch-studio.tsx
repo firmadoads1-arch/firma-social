@@ -21,7 +21,8 @@ import {BackgroundTasks} from '../../lib/prisma/background-tasks';
 import './video-batch.css';
 
 type Row={input:VideoBatchInput;state:VideoBatchState;percent:number;url?:string;blob?:Blob;name?:string;size?:number;saved?:string;error?:string;metadata?:ProfileOutputMetadata};
-export type VideoBatchStudioProps={active:boolean;templates:ProfileTemplate[];busy:boolean;onBusy:(busy:boolean)=>void;openTemplates:()=>void;back:()=>void;refreshFiles:()=>Promise<void>;onVideoReady?:ProfileVideoReadyHandler};
+export type VideoBatchSeed={requestId:string;files:File[];settings:Settings;templateId:string};
+export type VideoBatchStudioProps={active:boolean;templates:ProfileTemplate[];busy:boolean;onBusy:(busy:boolean)=>void;openTemplates:()=>void;back:()=>void;refreshFiles:()=>Promise<void>;onVideoReady?:ProfileVideoReadyHandler;initialBatch?:VideoBatchSeed|null;projectFolder?:string};
 const initial=():Settings=>({...defaults,profileEncoding:'fast',ratio:'9:16',maxSide:1920,profileLayout:{...defaultProfileLayout}});
 const download=(blob:Blob,name:string)=>{const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);};
 
@@ -34,7 +35,7 @@ async function timedRequest<T>(parent:AbortSignal|undefined,work:(signal:AbortSi
  finally{clearTimeout(timer);parent?.removeEventListener('abort',abort);}
 }
 
-export default function VideoBatchStudio({active,templates,busy,onBusy,openTemplates,back,refreshFiles,onVideoReady}:VideoBatchStudioProps){
+export default function VideoBatchStudio({active,templates,busy,onBusy,openTemplates,back,refreshFiles,onVideoReady,initialBatch,projectFolder}:VideoBatchStudioProps){
  const [settings,setSettings]=useState<Settings>(initial),[selected,setSelected]=useState('');
  const [inputs,setInputs]=useState<VideoBatchInput[]>([]),[previewId,setPreviewId]=useState(''),[fileURL,setFileURL]=useState('');
  const [composition,setComposition]=useState(''),[compositionError,setCompositionError]=useState('');
@@ -79,6 +80,13 @@ export default function VideoBatchStudio({active,templates,busy,onBusy,openTempl
   const result=addVideoBatchInputs(inputs,files);setInputs(result.items);setError(result.errors.join('\n'));
   setNotice(result.duplicates?`${result.duplicates} arquivo(s) já estavam na fila e não foram duplicados.`:'');
  };
+ useEffect(()=>{
+  if(!initialBatch)return;
+  const result=addVideoBatchInputs([],initialBatch.files);
+  setInputs(result.items);setPreviewId(result.items[0]?.id||'');setError(result.errors.join('\n'));
+  setSettings({...structuredClone(initialBatch.settings),ratio:'9:16',maxSide:1920,profileLayout:normalizeProfileLayout(initialBatch.settings.profileLayout)});
+  setSelected(initialBatch.templateId||templates[0]?.id||'');
+ },[initialBatch?.requestId]);
  const update=(next:Settings)=>setSettings({...next,ratio:'9:16',maxSide:1920,profileLayout:normalizeProfileLayout(next.profileLayout)});
  const changeLayout=(patch:Partial<ProfileLayout>)=>update({...settings,profileLayout:{...layout,...patch}});
  const previewNow=async(next:Settings=settings)=>{
@@ -180,7 +188,8 @@ export default function VideoBatchStudio({active,templates,busy,onBusy,openTempl
  if(!active)return null;
  const geometry=profileGeometry(1080,1920,layout);
  return <>
-  <div className="page-heading"><div><button className="back-link" onClick={back}><ArrowLeft size={15}/> Ferramentas</button><h1>Cloaker para spam · Vídeos em lote<span>.</span></h1><p>Vários vídeos. Uma modelo. O mesmo template e todos os ajustes do Avançado.</p></div><button className="secondary" disabled={locked} onClick={openTemplates}><AtSign size={16}/> Gerenciar templates</button></div>
+  <div className="page-heading"><div><button className="back-link" onClick={back}><ArrowLeft size={15}/> Ferramentas</button><h1>Templates em lote<span>.</span></h1><p>Adicione todos os vídeos, configure o template uma vez e aplique a todos.</p></div><button className="secondary" disabled={locked} onClick={openTemplates}><AtSign size={16}/> Gerenciar templates</button></div>
+  <div className="info-strip"><p>Destino das exportações: <strong>{projectFolder||'Pasta do projeto atual'}</strong>. Os originais ficam em uma pasta separada. Depois, escolha esta pasta em Rotinas para programar os envios.</p></div>
   <div className="shared-library-actions"><LibraryPicker disabled={locked} videoOnly multiple onFiles={rows=>choose(rows.map(r=>r.file))}/></div><div className="profile-workflow"><span><b>1</b> Importar vídeos</span><i/><span><b>2</b> Uma modelo + ajustes</span><i/><span><b>3</b> Gerar o lote</span><strong>1080 × 1920 · REELS</strong></div>
   <div className="editor-layout"><section className="editor-stage">
    <section className="panel video-batch-inputs" aria-label="Vídeos de entrada">
